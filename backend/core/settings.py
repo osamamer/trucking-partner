@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'trips',
     'logs',
     'activities',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
