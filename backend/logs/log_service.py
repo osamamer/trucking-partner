@@ -1,18 +1,48 @@
-import math
+from datetime import datetime, timedelta
 
-def get_activity_grid(activities):
-    grid = ['OFF_DUTY'] * 96 # Set all 96 15-min slots in a day to OFF_DUTY as a default
-    for activity in activities:
-        start_minutes = activity.start_time.hour * 60 + activity.start_time.minute
-        start_idx = start_minutes // 15
+def simulate_logs(total_hours):
+    logs = []
+    remaining = total_hours
+    day = 1
 
-        end_minutes = activity.end_time.hour * 60 + activity.end_time.minute
-        end_idx = math.ceil(end_minutes / 15) if activity.end_time else start_idx # Don't log activity if not yet finished
+    while remaining > 0:
+        day_segments = []
+        driving_today = min(11, remaining)
+        remaining -= driving_today
 
-        start_idx = max(0, start_idx)
-        end_idx = min(96, end_idx)
+        # Pickup/dropoff adjustments
+        if day == 1:
+            day_segments.append({"status": "ON_DUTY", "start": "00:00", "end": "01:00"})
+            start_time = datetime.strptime("01:00", "%H:%M")
+        else:
+            start_time = datetime.strptime("00:00", "%H:%M")
 
-        for i in range(start_idx, end_idx):
-            grid[i] = activity.type
+        drive_end = start_time + timedelta(hours=driving_today)
+        day_segments.append({
+            "status": "DRIVING",
+            "start": start_time.strftime("%H:%M"),
+            "end": drive_end.strftime("%H:%M")
+        })
 
-    return grid
+        # Add remaining on-duty and off-duty periods
+        if (drive_end - start_time).seconds / 3600 < 14:
+            on_duty_end = start_time + timedelta(hours=14)
+            day_segments.append({
+                "status": "ON_DUTY",
+                "start": drive_end.strftime("%H:%M"),
+                "end": on_duty_end.strftime("%H:%M")
+            })
+
+        day_segments.append({
+            "status": "OFF_DUTY",
+            "start": "14:00",
+            "end": "24:00"
+        })
+
+        logs.append({
+            "day": day,
+            "segments": day_segments
+        })
+        day += 1
+
+    return logs

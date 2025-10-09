@@ -1,7 +1,8 @@
-from rest_framework.routers import DefaultRouter
 from .views import LogViewSet
+from django.urls import path
 
-router = DefaultRouter()
-router.register(r'logs', LogViewSet)
 
-urlpatterns = router.urls
+urlpatterns = [
+    path('logs/list/', LogViewSet.as_view({'post': 'list'}), name='activity-start'),
+    path('logs/<int:pk>/retrieve/', LogViewSet.as_view({'post': 'retrieve'}), name='activity-end'),
+]
