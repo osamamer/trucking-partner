@@ -1,8 +1,8 @@
 import React, {useEffect, useRef, useState} from 'react';
 import { Truck, MapPin, Clock, AlertCircle, FileText, Plus, ChevronRight, Navigation } from 'lucide-react';
 
-// const MAPBOX_TOKEN = 'pk.eyJ1Ijoib3NhbWFhbWVyIiwiYSI6ImNtZ2pyMzdyZDBmcGYybHIwM3lhZm94c3MifQ.P8N7prGgak8NWqB1tGdIDw'; // Replace with your token
-const API_BASE_URL = 'http://localhost:8000/api'; // Replace with your backend URL
+// const MAPBOX_TOKEN = 'pk.eyJ1Ijoib3NhbWFhbWVyIiwiYSI6ImNtZ2pyMzdyZDBmcGYybHIwM3lhZm94c3MifQ.P8N7prGgak8NWqB1tGdIDw';
+const API_BASE_URL = 'http://localhost:8000/api';
 
 // Types
 interface Location {
@@ -374,17 +374,31 @@ function App() {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         console.log('Creating trip:', formData);
-        alert('Trip creation would call: POST /api/trips/');
+        await fetch(API_BASE_URL.concat('/trips/'), {
+            method: 'POST',
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                trip_name: formData.trip_name,
+                current_location_address: formData.current_location_address,
+                pickup_location_address: formData.pickup_location_address,
+                dropoff_location_address: formData.dropoff_location_address,
+                current_cycle_hours_used: formData.current_cycle_hours_used,
+                planned_start_time: formData.planned_start_time,
+            })
+        })
         setShowCreateForm(false);
     };
 
-    const handleGenerateRoute = (trip: Trip) => {
+    const handleGenerateRoute = async (trip: Trip) => {
         console.log('Generating route for trip:', trip.id);
-        alert(`Would call: POST /api/trips/${trip.id}/generate_route/`);
-    };
+        await fetch(API_BASE_URL.concat(`/trips/${trip.id}/generate_route/`), {
+            method: 'POST',
+            headers: {"Content-Type": "application/json"},
+        })
+    }
 
     const viewTripRoute = (trip: Trip) => {
         setSelectedTrip({ ...trip, route: mockRoute });
