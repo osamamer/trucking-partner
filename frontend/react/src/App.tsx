@@ -328,7 +328,7 @@ function App() {
     const [errorToast, setErrorToast] = useState<string | null>(null);
     const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
     const [loadingLogs, setLoadingLogs] = useState(false);
-
+    const [generatingRouteForTrip, setGeneratingRouteForTrip] = useState<number | null>(null);
 
     useEffect(() => {
         const fetchTrips = async () => {
@@ -455,6 +455,9 @@ function App() {
     const handleGenerateRoute = async (trip: Trip) => {
         console.log('Generating route for trip:', trip.id);
 
+        // Set this trip as currently generating
+        setGeneratingRouteForTrip(trip.id);
+
         try {
             const response = await fetch(`${API_BASE_URL}/trips/${trip.id}/generate_route/`, {
                 method: 'POST',
@@ -469,7 +472,6 @@ function App() {
                 try {
                     const errorData = await response.json();
                     console.error('Error response:', errorData);
-
                     errorMessage = errorData.error ||
                         errorData.message ||
                         errorData.detail ||
@@ -489,7 +491,7 @@ function App() {
                 }
 
                 setErrorToast(errorMessage);
-                setTimeout(() => setErrorToast(null), 6000); // Auto-dismiss after 6 seconds
+                setTimeout(() => setErrorToast(null), 6000);
 
                 throw new Error(errorMessage);
             }
@@ -497,6 +499,7 @@ function App() {
             const data = await response.json();
             console.log('Route generated successfully:', data);
 
+            // Refresh trips list after successful generation
             const updatedTrips = await getAllTrips();
             setTrips(updatedTrips);
 
@@ -510,6 +513,9 @@ function App() {
                 setErrorToast(errorMessage);
                 setTimeout(() => setErrorToast(null), 6000);
             }
+        } finally {
+            // Clear the generating state
+            setGeneratingRouteForTrip(null);
         }
     };
     const viewTripRoute = async (trip: Trip) => {
@@ -782,10 +788,24 @@ function App() {
                                         ) : (
                                             <button
                                                 onClick={() => handleGenerateRoute(trip)}
-                                                className="w-full px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all flex items-center justify-center gap-2"
+                                                disabled={generatingRouteForTrip === trip.id}
+                                                className={`w-full px-4 py-2 rounded-lg transition-all flex items-center justify-center gap-2 ${
+                                                    generatingRouteForTrip === trip.id
+                                                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                                        : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700'
+                                                }`}
                                             >
-                                                <Navigation className="w-4 h-4" />
-                                                Generate Route
+                                                {generatingRouteForTrip === trip.id ? (
+                                                    <>
+                                                        <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                                        Generating Route...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Navigation className="w-4 h-4" />
+                                                        Generate Route
+                                                    </>
+                                                )}
                                             </button>
                                         )}
                                     </div>
