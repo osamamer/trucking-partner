@@ -1,4 +1,7 @@
 # routes/services.py
+import json
+from asyncio import timeout
+from webbrowser import open_new
 
 import requests
 from datetime import datetime, timedelta
@@ -71,7 +74,7 @@ class MapBoxService:
             'steps': 'true'
         }
 
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
 
@@ -297,22 +300,20 @@ class RouteGenerationService:
             (self.trip.dropoff_location_latitude, self.trip.dropoff_location_longitude)
         ]
 
-        rough_route = self.mapbox.get_route(waypoints)
-        estimated_driving_hours = rough_route['distance_miles'] / HOSRules.AVERAGE_SPEED_MPH
-        estimated_total_hours = estimated_driving_hours + 2  # pickup + dropoff
-
-        if hours_available < estimated_total_hours:
+        route_result = self.mapbox.get_route(waypoints)
+        duration = route_result['duration_hours']
+        if hours_available < route_result['duration_hours']:
             self.trip.is_feasible = False
             self.trip.feasibility_message = (
-                f"Insufficient hours. Need ~{estimated_total_hours:.1f}h, "
+                f"Insufficient hours. Need ~{duration:.1f}h, "
                 f"but only {hours_available:.1f}h available in cycle."
             )
             self.trip.save()
             return False
 
         self.trip.is_feasible = True
-        self.trip.total_distance_miles = rough_route['distance_miles']
-        self.trip.estimated_duration_hours = rough_route['duration_hours']
+        self.trip.total_distance_miles = route_result['distance_miles']
+        self.trip.estimated_duration_hours = route_result['duration_hours']
         self.trip.save()
         return True
 
