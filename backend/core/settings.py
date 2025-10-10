@@ -25,10 +25,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-y_eu20_0dm46i33!5**pqj@===6g2=42=!z6pz^w!jd40d@kmk"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = [
+    'yourdomain.com',       # Your actual domain name
+    'www.yourdomain.com',   # Include the 'www' subdomain if applicable
+    'your_server_ip_address', # The IP address of your server
+    'localhost',            # For local testing if needed, but not recommended for production
+    '127.0.0.1',            # Another common local address
+]
 MAPBOX_ACCESS_TOKEN = 'your_mapbox_token_here'
 # Application definition
 
@@ -82,9 +87,9 @@ WSGI_APPLICATION = "core.wsgi.application"
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'trucking_partner',
-        'USER': 'trucking_user',
-        'PASSWORD': 'your_secure_password',
+        'NAME': 'trucking_db',
+        'USER': 'user',
+        'PASSWORD': 'password',
         'HOST': 'localhost',
         'PORT': '5432',
     }
