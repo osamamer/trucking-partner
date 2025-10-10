@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import { Truck, MapPin, Clock, AlertCircle, FileText, Plus, ChevronRight, Navigation } from 'lucide-react';
+
+// const MAPBOX_TOKEN = 'pk.eyJ1Ijoib3NhbWFhbWVyIiwiYSI6ImNtZ2pyMzdyZDBmcGYybHIwM3lhZm94c3MifQ.P8N7prGgak8NWqB1tGdIDw'; // Replace with your token
+const API_BASE_URL = 'http://localhost:8000/api'; // Replace with your backend URL
 
 // Types
 interface Location {
@@ -171,6 +174,149 @@ const mockDailyLogs: DailyLog[] = [
         total_miles: 578
     }
 ];
+
+// MapBox Route Component
+const MapboxRouteMap: React.FC<{ route: RouteData }> = ({ route }) => {
+    const mapContainer = useRef<HTMLDivElement>(null);
+    const map = useRef<any>(null);
+
+    useEffect(() => {
+        if (!mapContainer.current || map.current) return;
+
+        // Check if mapboxgl is available
+        if (typeof window === 'undefined' || !(window as any).mapboxgl) {
+            console.error('Mapbox GL JS not loaded');
+            return;
+        }
+
+        const mapboxgl = (window as any).mapboxgl;
+        mapboxgl.accessToken = MAPBOX_TOKEN;
+
+        // Initialize map
+        map.current = new mapboxgl.Map({
+            container: mapContainer.current,
+            style: 'mapbox://styles/mapbox/dark-v11',
+            center: [-98.5795, 39.8283], // Center of US
+            zoom: 4
+        });
+
+        map.current.on('load', () => {
+            // Create route coordinates
+            const coordinates = route.stops
+                .filter(stop => stop.location.latitude !== 0 && stop.location.longitude !== 0)
+                .map(stop => [stop.location.longitude, stop.location.latitude]);
+
+            // Add route line
+            map.current.addSource('route', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: coordinates
+                    }
+                }
+            });
+
+            map.current.addLayer({
+                id: 'route',
+                type: 'line',
+                source: 'route',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': '#f97316',
+                    'line-width': 4,
+                    'line-opacity': 0.8
+                }
+            });
+
+            // Add markers for each stop
+            route.stops.forEach((stop, index) => {
+                if (stop.location.latitude === 0 && stop.location.longitude === 0) return;
+
+                // Create custom marker element
+                const el = document.createElement('div');
+                el.className = 'custom-marker';
+                el.style.width = '32px';
+                el.style.height = '32px';
+                el.style.borderRadius = '50%';
+                el.style.display = 'flex';
+                el.style.alignItems = 'center';
+                el.style.justifyContent = 'center';
+                el.style.fontSize = '18px';
+                el.style.cursor = 'pointer';
+                el.style.border = '2px solid white';
+                el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+
+                // Set marker color and icon based on stop type
+                const markerStyles: Record<string, { bg: string; icon: string }> = {
+                    current: { bg: '#3b82f6', icon: '🚛' },
+                    pickup: { bg: '#10b981', icon: '📦' },
+                    dropoff: { bg: '#ef4444', icon: '🏁' },
+                    fuel: { bg: '#f59e0b', icon: '⛽' },
+                    '30min_break': { bg: '#8b5cf6', icon: '☕' },
+                    '10hr_break': { bg: '#6366f1', icon: '🛏️' }
+                };
+
+                const style = markerStyles[stop.stop_type] || { bg: '#6b7280', icon: '📍' };
+                el.style.backgroundColor = style.bg;
+                el.innerHTML = style.icon;
+
+                // Create popup
+                const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+                    <div style="color: #1f2937; min-width: 200px;">
+                        <h3 style="font-weight: bold; margin-bottom: 4px; color: #f97316;">
+                            ${stop.stop_type_display}
+                        </h3>
+                        <p style="font-size: 14px; margin-bottom: 8px;">${stop.location.address}</p>
+                        <p style="font-size: 12px; color: #6b7280;">${stop.description}</p>
+                        <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                            Arrive: ${new Date(stop.arrival_time).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })}
+                        </p>
+                    </div>
+                `);
+
+                new mapboxgl.Marker(el)
+                    .setLngLat([stop.location.longitude, stop.location.latitude])
+                    .setPopup(popup)
+                    .addTo(map.current);
+            });
+
+            // Fit map to show all markers
+            if (coordinates.length > 0) {
+                const bounds = coordinates.reduce((bounds, coord) => {
+                    return bounds.extend(coord as [number, number]);
+                }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+
+                map.current.fitBounds(bounds, {
+                    padding: 50,
+                    maxZoom: 8
+                });
+            }
+        });
+
+        return () => {
+            if (map.current) {
+                map.current.remove();
+                map.current = null;
+            }
+        };
+    }, [route]);
+
+    return (
+        <div
+            ref={mapContainer}
+            className="w-full h-[600px] rounded-xl overflow-hidden border-2 border-orange-500/30"
+        />
+    );
+};
 
 function App() {
     const [activeView, setActiveView] = useState<'trips' | 'create' | 'route' | 'logs'>('trips');
@@ -467,7 +613,8 @@ function App() {
                         >
                             ← Back to Trips
                         </button>
-                        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-orange-500/20 p-6 mb-6">
+                        <div
+                            className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-orange-500/20 p-6 mb-6">
                             <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
                                 {selectedTrip.trip_name}
                             </h2>
@@ -498,29 +645,38 @@ function App() {
                                 </div>
                             </div>
                         </div>
-
+                        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-6 mb-6">
+                            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                <MapPin className="w-5 h-5 text-orange-400"/>
+                                Route Map
+                            </h3>
+                            <MapboxRouteMap route={selectedTrip.route}/>
+                        </div>
                         <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-6">
                             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                                <Navigation className="w-5 h-5 text-orange-400" />
+                                <Navigation className="w-5 h-5 text-orange-400"/>
                                 Route Stops
                             </h3>
                             <div className="space-y-3">
                                 {selectedTrip.route.stops.map((stop, idx) => (
                                     <div key={stop.sequence}>
-                                        <div className="bg-gray-700/30 rounded-lg p-4 hover:bg-gray-700/50 transition-all">
+                                        <div
+                                            className="bg-gray-700/30 rounded-lg p-4 hover:bg-gray-700/50 transition-all">
                                             <div className="flex items-start gap-4">
                                                 <div className="text-3xl">{getStopIcon(stop.stop_type)}</div>
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex justify-between items-start mb-2 flex-wrap gap-2">
+                                                    <div
+                                                        className="flex justify-between items-start mb-2 flex-wrap gap-2">
                                                         <div className="flex-1 min-w-0">
                                                             <h4 className="font-bold text-orange-400">{stop.stop_type_display}</h4>
                                                             <p className="text-sm text-gray-400 break-words">{stop.location.address}</p>
                                                         </div>
-                                                        <span className="text-xs text-gray-500 flex-shrink-0">Stop {stop.sequence + 1}</span>
+                                                        <span
+                                                            className="text-xs text-gray-500 flex-shrink-0">Stop {stop.sequence + 1}</span>
                                                     </div>
                                                     <div className="flex flex-wrap gap-4 text-sm text-gray-400">
                             <span className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
+                              <Clock className="w-4 h-4"/>
                               Arrive: {formatTime(stop.arrival_time)}
                             </span>
                                                         {stop.duration_minutes > 0 && (
@@ -534,8 +690,9 @@ function App() {
                                             </div>
                                         </div>
                                         {idx < selectedTrip.route.stops.length - 1 && (
-                                            <div className="ml-8 mt-2 pl-4 border-l-2 border-dashed border-orange-500/30 py-2">
-                                                <ChevronRight className="w-4 h-4 text-orange-500/50" />
+                                            <div
+                                                className="ml-8 mt-2 pl-4 border-l-2 border-dashed border-orange-500/30 py-2">
+                                                <ChevronRight className="w-4 h-4 text-orange-500/50"/>
                                             </div>
                                         )}
                                     </div>

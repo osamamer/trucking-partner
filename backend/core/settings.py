@@ -29,7 +29,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-
+MAPBOX_ACCESS_TOKEN = 'your_mapbox_token_here'
 # Application definition
 
 INSTALLED_APPS = [

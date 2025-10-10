@@ -1,28 +1,43 @@
 from django.db import models
-from django.contrib.postgres.fields import JSONField  # Use this if PostgreSQL, otherwise see note below
+from trips.models import Trip
 
 
 class Route(models.Model):
     """
-    Generated route for a trip - one route per trip
+    Generated route for a trip with all calculated stops and compliance info
     """
-    trip = models.OneToOneField('trips.Trip', on_delete=models.CASCADE, related_name='route')
+    COMPLIANCE_CHOICES = [
+        ('compliant', 'Compliant'),
+        ('non_compliant', 'Non-Compliant'),
+        ('warning', 'Warning'),
+    ]
 
-    # Route metadata
-    created_at = models.DateTimeField(auto_now_add=True)
+    trip = models.OneToOneField(Trip, on_delete=models.CASCADE, related_name='route')
 
-    # MapBox route data
-    mapbox_geometry = models.JSONField(help_text="GeoJSON geometry from MapBox for drawing route")
-
-    # Summary statistics
+    # Route Overview
     total_distance_miles = models.FloatField()
-    total_duration_hours = models.FloatField()
+    total_duration_hours = models.FloatField(help_text="Total elapsed time including breaks")
+    total_driving_hours = models.FloatField(help_text="Actual driving time")
+    total_on_duty_hours = models.FloatField(help_text="Driving + loading/unloading")
+    total_off_duty_hours = models.FloatField(help_text="Rest breaks and sleeper berth")
 
-    # ELD compliance summary
-    total_driving_hours = models.FloatField()
-    total_on_duty_hours = models.FloatField()
-    cycle_hours_after_trip = models.FloatField(help_text="Cycle hours used after completing trip")
-    compliance_status = models.CharField(max_length=20, default='compliant')
+    # Compliance
+    compliance_status = models.CharField(
+        max_length=20,
+        choices=COMPLIANCE_CHOICES,
+        default='compliant'
+    )
+    compliance_notes = models.TextField(blank=True)
+
+    # MapBox Data
+    mapbox_route_geometry = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="GeoJSON geometry from MapBox Directions API"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -33,70 +48,52 @@ class Route(models.Model):
 
 class Stop(models.Model):
     """
-    Individual stop on the route (pickup, dropoff, fuel, breaks, etc.)
+    Individual stop along the route (pickup, dropoff, rest, fuel, break)
     """
     STOP_TYPE_CHOICES = [
+        ('current', 'Current Location'),
         ('pickup', 'Pickup'),
         ('dropoff', 'Dropoff'),
         ('fuel', 'Fuel Stop'),
         ('30min_break', '30-Minute Break'),
         ('10hr_break', '10-Hour Rest'),
-        ('rest_break', 'Rest Break'),
     ]
 
     route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name='stops')
 
-    # Stop order in the route
-    sequence = models.IntegerField(help_text="Order of this stop in the route")
+    # Stop Details
+    sequence = models.IntegerField(help_text="Order of stop in route (0-indexed)")
+    stop_type = models.CharField(max_length=20, choices=STOP_TYPE_CHOICES)
 
     # Location
-    location_address = models.CharField(max_length=500, blank=True)
-    location_lat = models.FloatField()
-    location_lng = models.FloatField()
-
-    # Stop details
-    stop_type = models.CharField(max_length=20, choices=STOP_TYPE_CHOICES)
-    description = models.TextField(blank=True)
+    address = models.CharField(max_length=500)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    place_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="MapBox place ID if available"
+    )
 
     # Timing
     arrival_time = models.DateTimeField()
     departure_time = models.DateTimeField()
-    duration_minutes = models.IntegerField()
+    duration_minutes = models.IntegerField(help_text="How long stopped here")
+
+    # Additional Info
+    description = models.TextField(blank=True)
+    miles_from_previous = models.FloatField(
+        default=0,
+        help_text="Distance from previous stop"
+    )
+    cumulative_miles = models.FloatField(
+        default=0,
+        help_text="Total miles driven up to this stop"
+    )
 
     class Meta:
-        ordering = ['sequence']
-        indexes = [
-            models.Index(fields=['route', 'sequence']),
-        ]
+        ordering = ['route', 'sequence']
+        unique_together = ['route', 'sequence']
 
     def __str__(self):
-        return f"{self.get_stop_type_display()} - Stop {self.sequence}"
-
-
-class RouteSegment(models.Model):
-    """
-    Driving segment between two stops
-    """
-    route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name='segments')
-
-    # Segment order
-    sequence = models.IntegerField(help_text="Order of this segment in the route")
-
-    # Start and end stops
-    start_stop = models.ForeignKey(Stop, on_delete=models.CASCADE, related_name='segments_starting')
-    end_stop = models.ForeignKey(Stop, on_delete=models.CASCADE, related_name='segments_ending')
-
-    # Segment details
-    distance_miles = models.FloatField()
-    duration_minutes = models.FloatField()
-    start_time = models.DateTimeField()
-    end_time = models.DateTimeField()
-
-    class Meta:
-        ordering = ['sequence']
-        indexes = [
-            models.Index(fields=['route', 'sequence']),
-        ]
-
-    def __str__(self):
-        return f"Segment {self.sequence}: {self.distance_miles} miles"
+        return f"{self.get_stop_type_display()} - {self.address}"
