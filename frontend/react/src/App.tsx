@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import { Truck, MapPin, Clock, AlertCircle, FileText, Plus, ChevronRight, Navigation } from 'lucide-react';
 
-// const MAPBOX_TOKEN = 'pk.eyJ1Ijoib3NhbWFhbWVyIiwiYSI6ImNtZ2pyMzdyZDBmcGYybHIwM3lhZm94c3MifQ.P8N7prGgak8NWqB1tGdIDw';
+const MAPBOX_TOKEN = 'pk.eyJ1Ijoib3NhbWFhbWVyIiwiYSI6ImNtZ2pyMzdyZDBmcGYybHIwM3lhZm94c3MifQ.P8N7prGgak8NWqB1tGdIDw';
 const API_BASE_URL = 'http://localhost:8000/api';
 
 // Types
@@ -175,6 +175,8 @@ const mockDailyLogs: DailyLog[] = [
     }
 ];
 
+
+
 // MapBox Route Component
 const MapboxRouteMap: React.FC<{ route: RouteData }> = ({ route }) => {
     const mapContainer = useRef<HTMLDivElement>(null);
@@ -321,8 +323,17 @@ const MapboxRouteMap: React.FC<{ route: RouteData }> = ({ route }) => {
 function App() {
     const [activeView, setActiveView] = useState<'trips' | 'create' | 'route' | 'logs'>('trips');
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
-    const [trips] = useState<Trip[]>(mockTrips);
+    const [trips, setTrips] = useState<Trip[]>(mockTrips);
     const [showCreateForm, setShowCreateForm] = useState(false);
+
+    useEffect(() => {
+        const fetchTrips = async () => {
+            const trips = await getAllTrips();
+            setTrips(trips);
+        };
+
+        fetchTrips();
+    }, []);
 
     const [formData, setFormData] = useState({
         trip_name: '',
@@ -348,6 +359,17 @@ function App() {
             hour: '2-digit',
             minute: '2-digit'
         });
+    };
+
+     const getAllTrips = async () => {
+        const response = await fetch(`${API_BASE_URL}/trips/`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+        if (!response.ok) throw new Error('Failed to fetch trips');
+        return response.json();
     };
 
     const getStopIcon = (stopType: string) => {
@@ -377,28 +399,62 @@ function App() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         console.log('Creating trip:', formData);
-        await fetch(API_BASE_URL.concat('/trips/'), {
-            method: 'POST',
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                trip_name: formData.trip_name,
-                current_location_address: formData.current_location_address,
-                pickup_location_address: formData.pickup_location_address,
-                dropoff_location_address: formData.dropoff_location_address,
-                current_cycle_hours_used: formData.current_cycle_hours_used,
-                planned_start_time: formData.planned_start_time,
-            })
-        })
-        setShowCreateForm(false);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/trips/`, {
+                method: 'POST',
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(formData)
+            });
+
+            console.log('Response status:', response.status);
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                console.error('Error response:', errorData);
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Trip created successfully:', data);
+
+            setShowCreateForm(false);
+            // Optionally refresh trips list here
+        } catch (error) {
+            console.error('Failed to create trip:', error);
+            alert('Failed to create trip. Check console for details.');
+        }
     };
+
 
     const handleGenerateRoute = async (trip: Trip) => {
         console.log('Generating route for trip:', trip.id);
-        await fetch(API_BASE_URL.concat(`/trips/${trip.id}/generate_route/`), {
-            method: 'POST',
-            headers: {"Content-Type": "application/json"},
-        })
-    }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/trips/${trip.id}/generate_route/`, {
+                method: 'POST',
+                headers: {"Content-Type": "application/json"},
+            });
+
+            console.log('Route generation response status:', response.status);
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                console.error('Error response:', errorData);
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Route generated successfully:', data);
+
+            // Optionally refresh the trip data here
+        } catch (error) {
+            console.error('Failed to generate route:', error);
+            alert('Failed to generate route. Check console for details.');
+        }
+    };
 
     const viewTripRoute = (trip: Trip) => {
         setSelectedTrip({ ...trip, route: mockRoute });

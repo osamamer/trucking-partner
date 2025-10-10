@@ -25,15 +25,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-y_eu20_0dm46i33!5**pqj@===6g2=42=!z6pz^w!jd40d@kmk"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = [
-    'yourdomain.com',       # Your actual domain name
-    'www.yourdomain.com',   # Include the 'www' subdomain if applicable
-    'your_server_ip_address', # The IP address of your server
-    'localhost',            # For local testing if needed, but not recommended for production
-    '127.0.0.1',            # Another common local address
-]
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 MAPBOX_ACCESS_TOKEN = 'your_mapbox_token_here'
 # Application definition
 
@@ -49,9 +43,11 @@ INSTALLED_APPS = [
     'routes',
     # 'activities',
     'rest_framework',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -114,6 +110,47 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# Add to your CORS settings section
+CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",  # Add both
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+# Add these important settings:
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# IMPORTANT: For development, you can temporarily disable CSRF for API endpoints
+# Add this if you're using Django REST Framework:
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [],
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -136,3 +173,4 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
