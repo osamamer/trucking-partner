@@ -10,7 +10,8 @@ from .serializers import (
     TripDetailSerializer
 )
 from routes.services import generate_route_for_trip
-
+import logging
+logger = logging.getLogger(__name__)
 
 class TripViewSet(viewsets.ModelViewSet):
     """
@@ -43,6 +44,7 @@ class TripViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def generate_route(self, request, pk=None):
+        logger.info(f"=== GENERATE ROUTE CALLED for trip {pk} ===")
         trip = self.get_object()
 
         # Check if route already exists
@@ -54,6 +56,8 @@ class TripViewSet(viewsets.ModelViewSet):
 
         try:
             # Generate the route
+            logger.info(f"Trip found: {trip.trip_name}")
+            logger.info(f"Starting route generation...")
             route = generate_route_for_trip(trip.id)
 
             # Return the updated trip with route

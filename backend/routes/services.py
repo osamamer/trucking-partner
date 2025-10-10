@@ -8,7 +8,8 @@ from django.utils import timezone
 from trips.models import Trip
 from .models import Route, Stop
 from logs.models import DailyLog, LogEntry
-
+import logging
+logger = logging.getLogger(__name__)
 
 # HOS Rules Configuration
 class HOSRules:
@@ -29,6 +30,7 @@ class HOSRules:
 
 class MapBoxService:
     """Handles all MapBox API calls"""
+    # todo proper bug handling for api errors
 
     BASE_URL = "https://api.mapbox.com"
 
@@ -94,8 +96,7 @@ class MapBoxService:
         Find nearest rest area, gas station, or parking near a coordinate
         stop_type: 'rest', 'fuel', 'break'
         """
-        import logging
-        logger = logging.getLogger(__name__)
+
 
         # Different search strategies based on stop type
         search_strategies = {
@@ -241,8 +242,6 @@ class RouteGenerationService:
         self.miles_since_fuel = 0
 
     def generate_route(self) -> Route:
-        """Main entry point - generates complete route with all stops"""
-
         # Step 1: Geocode all addresses if not already done
         self._geocode_locations()
 
@@ -252,7 +251,7 @@ class RouteGenerationService:
 
         # Step 3: Get base route from MapBox
         base_route = self._get_base_route()
-
+        # TODO: fix this. Most of the bugs start here. The base route is fine, what happens after is messy.
         # Step 4: Generate all stops with HOS compliance
         self._generate_stops(base_route)
 

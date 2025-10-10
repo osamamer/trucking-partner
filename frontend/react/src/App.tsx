@@ -1,8 +1,11 @@
 import React, {useEffect, useRef, useState} from 'react';
 import { Truck, MapPin, Clock, AlertCircle, FileText, Plus, ChevronRight, Navigation } from 'lucide-react';
 
+// TODO: move these into environment variables
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoib3NhbWFhbWVyIiwiYSI6ImNtZ2pyMzdyZDBmcGYybHIwM3lhZm94c3MifQ.P8N7prGgak8NWqB1tGdIDw';
 const API_BASE_URL = 'http://localhost:8000/api';
+
+// TODO: separate stuff into different packages
 
 // Types
 interface Location {
@@ -461,25 +464,35 @@ function App() {
         try {
             const response = await fetch(`${API_BASE_URL}/trips/${trip.id}/generate_route/`, {
                 method: 'POST',
-                headers: {"Content-Type": "application/json"},
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             });
 
             console.log('Route generation response status:', response.status);
+            console.log('Response headers:', response.headers);
 
             if (!response.ok) {
                 let errorMessage = 'The requested route cannot be generated at this time.';
 
+                // Clone the response before reading to avoid "body already read" errors
+                const contentType = response.headers.get('content-type');
+
                 try {
-                    const errorData = await response.json();
-                    console.error('Error response:', errorData);
-                    errorMessage = errorData.error ||
-                        errorData.message ||
-                        errorData.detail ||
-                        (typeof errorData === 'string' ? errorData : errorMessage);
-                } catch {
-                    const errorText = await response.text();
-                    console.error('Error response:', errorText);
-                    if (errorText) errorMessage = errorText;
+                    if (contentType && contentType.includes('application/json')) {
+                        const errorData = await response.json();
+                        console.error('Error response JSON:', errorData);
+                        errorMessage = errorData.error ||
+                            errorData.message ||
+                            errorData.detail ||
+                            errorMessage;
+                    } else {
+                        const errorText = await response.text();
+                        console.error('Error response text:', errorText);
+                        if (errorText) errorMessage = errorText;
+                    }
+                } catch (parseError) {
+                    console.error('Failed to parse error response:', parseError);
                 }
 
                 if (response.status === 400) {
@@ -492,7 +505,6 @@ function App() {
 
                 setErrorToast(errorMessage);
                 setTimeout(() => setErrorToast(null), 6000);
-
                 throw new Error(errorMessage);
             }
 
