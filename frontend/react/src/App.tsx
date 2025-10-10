@@ -326,6 +326,9 @@ function App() {
     const [trips, setTrips] = useState<Trip[]>(mockTrips);
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [errorToast, setErrorToast] = useState<string | null>(null);
+    const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
+    const [loadingLogs, setLoadingLogs] = useState(false);
+
 
     useEffect(() => {
         const fetchTrips = async () => {
@@ -371,6 +374,25 @@ function App() {
         });
         if (!response.ok) throw new Error('Failed to fetch trips');
         return response.json();
+    };
+    const fetchDailyLogs = async (tripId: number) => {
+        setLoadingLogs(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/daily-logs/?trip=${tripId}`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const logs = await response.json();
+            console.log('Daily logs fetched:', logs);
+            setDailyLogs(logs);
+        } catch (error) {
+            console.error('Failed to fetch daily logs:', error);
+            setDailyLogs([]);
+        } finally {
+            setLoadingLogs(false);
+        }
     };
 
     const getStopIcon = (stopType: string) => {
@@ -522,10 +544,12 @@ function App() {
         }
     };
 
-    const viewTripLogs = (trip: Trip) => {
+    const viewTripLogs = async (trip: Trip) => {
         setSelectedTrip(trip);
         setActiveView('logs');
+        await fetchDailyLogs(trip.id);
     };
+
     const ErrorToast = () => {
         if (!errorToast) return null;
 
@@ -883,69 +907,97 @@ function App() {
                             <p className="text-gray-400">ELD compliance logs for this trip</p>
                         </div>
 
-                        <div className="space-y-4">
-                            {mockDailyLogs.map((log) => (
-                                <div
-                                    key={log.id}
-                                    className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6"
-                                >
-                                    <div className="flex justify-between items-start mb-4 flex-wrap gap-3">
-                                        <div>
-                                            <h3 className="text-xl font-bold text-orange-400">Day {log.day_number}</h3>
-                                            <p className="text-sm text-gray-400">{formatDate(log.log_date)}</p>
-                                        </div>
-                                        <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
-                      Compliant
-                    </span>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                        <div className="bg-gray-700/30 rounded-lg p-3">
-                                            <div className="text-xs text-gray-400 mb-1">Driving</div>
-                                            <div className="text-lg font-bold text-orange-400">{log.total_driving_hours}h</div>
-                                        </div>
-                                        <div className="bg-gray-700/30 rounded-lg p-3">
-                                            <div className="text-xs text-gray-400 mb-1">On-Duty</div>
-                                            <div className="text-lg font-bold text-blue-400">{log.total_on_duty_hours}h</div>
-                                        </div>
-                                        <div className="bg-gray-700/30 rounded-lg p-3">
-                                            <div className="text-xs text-gray-400 mb-1">Off-Duty</div>
-                                            <div className="text-lg font-bold text-green-400">{log.total_off_duty_hours}h</div>
-                                        </div>
-                                        <div className="bg-gray-700/30 rounded-lg p-3">
-                                            <div className="text-xs text-gray-400 mb-1">Miles</div>
-                                            <div className="text-lg font-bold text-purple-400">{log.total_miles}</div>
-                                        </div>
-                                    </div>
-
-                                    <div className="border-t border-gray-700 pt-4">
-                                        <div className="flex flex-col sm:flex-row justify-between gap-2 text-sm">
-                      <span className="text-gray-400">
-                        Start: <span className="text-gray-300">{log.start_location}</span>
-                      </span>
-                                            <span className="text-gray-400">
-                        End: <span className="text-gray-300">{log.end_location}</span>
-                      </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                            <div className="flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
-                                <div>
-                                    <h4 className="font-bold text-blue-400 mb-1">ELD Grid Visualization Coming Soon</h4>
-                                    <p className="text-sm text-gray-400">
-                                        The visual ELD log grid (24-hour timeline with duty status bars) will be implemented next.
-                                        Use API endpoint: <code className="bg-gray-700 px-2 py-0.5 rounded text-orange-400 text-xs">
-                                        GET /api/daily-logs/&#123;id&#125;/export/
-                                    </code>
-                                    </p>
-                                </div>
+                        {loadingLogs ? (
+                            <div className="text-center py-12">
+                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+                                <p className="text-gray-400 mt-4">Loading daily logs...</p>
                             </div>
-                        </div>
+                        ) : dailyLogs.length === 0 ? (
+                            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-8 text-center">
+                                <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                                <h3 className="text-xl font-bold text-gray-300 mb-2">No Daily Logs Found</h3>
+                                <p className="text-gray-400">
+                                    This trip doesn't have any daily logs yet. Generate a route first to create logs.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="space-y-4">
+                                    {dailyLogs.map((log) => (
+                                        <div
+                                            key={log.id}
+                                            className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6"
+                                        >
+                                            <div className="flex justify-between items-start mb-4 flex-wrap gap-3">
+                                                <div>
+                                                    <h3 className="text-xl font-bold text-orange-400">Day {log.day_number}</h3>
+                                                    <p className="text-sm text-gray-400">{formatDate(log.log_date)}</p>
+                                                </div>
+                                                <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
+                                    Compliant
+                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                                <div className="bg-gray-700/30 rounded-lg p-3">
+                                                    <div className="text-xs text-gray-400 mb-1">Driving</div>
+                                                    <div className="text-lg font-bold text-orange-400">
+                                                        {typeof log.total_driving_hours === 'number'
+                                                            ? log.total_driving_hours.toFixed(1)
+                                                            : log.total_driving_hours}h
+                                                    </div>
+                                                </div>
+                                                <div className="bg-gray-700/30 rounded-lg p-3">
+                                                    <div className="text-xs text-gray-400 mb-1">On-Duty</div>
+                                                    <div className="text-lg font-bold text-blue-400">
+                                                        {typeof log.total_on_duty_hours === 'number'
+                                                            ? log.total_on_duty_hours.toFixed(1)
+                                                            : log.total_on_duty_hours}h
+                                                    </div>
+                                                </div>
+                                                <div className="bg-gray-700/30 rounded-lg p-3">
+                                                    <div className="text-xs text-gray-400 mb-1">Off-Duty</div>
+                                                    <div className="text-lg font-bold text-green-400">
+                                                        {typeof log.total_off_duty_hours === 'number'
+                                                            ? log.total_off_duty_hours.toFixed(1)
+                                                            : log.total_off_duty_hours}h
+                                                    </div>
+                                                </div>
+                                                <div className="bg-gray-700/30 rounded-lg p-3">
+                                                    <div className="text-xs text-gray-400 mb-1">Miles</div>
+                                                    <div className="text-lg font-bold text-purple-400">
+                                                        {log.total_miles.toFixed(0)}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="border-t border-gray-700 pt-4">
+                                                <div className="flex flex-col sm:flex-row justify-between gap-2 text-sm">
+                                    <span className="text-gray-400">
+                                        Start: <span className="text-gray-300">{log.start_location}</span>
+                                    </span>
+                                                    <span className="text-gray-400">
+                                        End: <span className="text-gray-300">{log.end_location}</span>
+                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                                    <div className="flex items-start gap-3">
+                                        <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                                        <div>
+                                            <h4 className="font-bold text-blue-400 mb-1">ELD Grid Visualization Coming Soon</h4>
+                                            <p className="text-sm text-gray-400">
+                                                The visual ELD log grid (24-hour timeline with duty status bars) will be implemented next.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </main>
