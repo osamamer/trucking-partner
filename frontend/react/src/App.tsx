@@ -332,6 +332,8 @@ function App() {
     const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
     const [loadingLogs, setLoadingLogs] = useState(false);
     const [generatingRouteForTrip, setGeneratingRouteForTrip] = useState<number | null>(null);
+    const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         const fetchTrips = async () => {
@@ -422,9 +424,69 @@ function App() {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    const validateForm = () => {
+        const errors: Record<string, string> = {};
+
+        // Trip name validation
+        if (!formData.trip_name.trim()) {
+            errors.trip_name = 'Trip name is required';
+        } else if (formData.trip_name.trim().length < 3) {
+            errors.trip_name = 'Trip name must be at least 3 characters';
+        }
+
+        // Location format validation (City, State or City, State, Country)
+        const locationRegex = /^[a-zA-Z\s]+,\s*[a-zA-Z\s]+$/;
+
+        if (!formData.current_location_address.trim()) {
+            errors.current_location_address = 'Current location is required';
+        } else if (!locationRegex.test(formData.current_location_address.trim())) {
+            errors.current_location_address = 'Format: City, State (e.g., "Los Angeles, CA")';
+        }
+
+        if (!formData.pickup_location_address.trim()) {
+            errors.pickup_location_address = 'Pickup location is required';
+        } else if (!locationRegex.test(formData.pickup_location_address.trim())) {
+            errors.pickup_location_address = 'Format: City, State (e.g., "Fresno, CA")';
+        }
+
+        if (!formData.dropoff_location_address.trim()) {
+            errors.dropoff_location_address = 'Dropoff location is required';
+        } else if (!locationRegex.test(formData.dropoff_location_address.trim())) {
+            errors.dropoff_location_address = 'Format: City, State (e.g., "New York, NY")';
+        }
+
+        // Cycle hours validation
+        const cycleHours = parseFloat(formData.current_cycle_hours_used);
+        if (isNaN(cycleHours) || cycleHours < 0 || cycleHours > 70) {
+            errors.current_cycle_hours_used = 'Must be between 0 and 70 hours';
+        }
+
+        // Start time validation
+        if (!formData.planned_start_time) {
+            errors.planned_start_time = 'Planned start time is required';
+        } else {
+            const startTime = new Date(formData.planned_start_time);
+            const now = new Date();
+            if (startTime < now) {
+                errors.planned_start_time = 'Start time cannot be in the past';
+            }
+        }
+
+        setFormErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Creating trip:', formData);
+
+        // Clear previous errors
+        setFormErrors({});
+
+        // Validate form
+        if (!validateForm()) {
+            return;
+        }
+
+        setIsSubmitting(true);
 
         try {
             const response = await fetch(`${API_BASE_URL}/trips/`, {
@@ -435,22 +497,43 @@ function App() {
                 body: JSON.stringify(formData)
             });
 
-            console.log('Response status:', response.status);
-
             if (!response.ok) {
-                const errorData = await response.text();
-                console.error('Error response:', errorData);
+                const errorData = await response.json().catch(() => ({}));
+
+                if (response.status === 400 && errorData.errors) {
+                    // Backend validation errors
+                    setFormErrors(errorData.errors);
+                } else {
+                    setErrorToast(
+                        errorData.message ||
+                        errorData.detail ||
+                        'Failed to create trip. Please check your information and try again.'
+                    );
+                    setTimeout(() => setErrorToast(null), 6000);
+                }
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const newTrip = await response.json();
             console.log('Trip created successfully:', newTrip);
+
+            // Reset form and close modal
+            setFormData({
+                trip_name: '',
+                current_location_address: '',
+                pickup_location_address: '',
+                dropoff_location_address: '',
+                current_cycle_hours_used: '0',
+                planned_start_time: ''
+            });
+            setFormErrors({});
             setTrips(prevTrips => [...prevTrips, newTrip]);
             setShowCreateForm(false);
-            // Optionally refresh trips list here
+
         } catch (error) {
             console.error('Failed to create trip:', error);
-            alert('Failed to create trip. Check console for details.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -658,82 +741,150 @@ function App() {
                             </div>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Trip Name</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        Trip Name <span className="text-red-400">*</span>
+                                    </label>
                                     <input
                                         type="text"
                                         name="trip_name"
                                         value={formData.trip_name}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white"
+                                        className={`w-full px-4 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white ${
+                                            formErrors.trip_name ? 'border-red-500' : 'border-gray-600'
+                                        }`}
                                         placeholder="e.g., LA to NYC Cross-Country"
                                     />
+                                    {formErrors.trip_name && (
+                                        <p className="text-red-400 text-sm mt-1">{formErrors.trip_name}</p>
+                                    )}
                                 </div>
+
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Current Location</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        Current Location <span className="text-red-400">*</span>
+                                    </label>
                                     <input
                                         type="text"
                                         name="current_location_address"
                                         value={formData.current_location_address}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white"
+                                        className={`w-full px-4 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white ${
+                                            formErrors.current_location_address ? 'border-red-500' : 'border-gray-600'
+                                        }`}
                                         placeholder="Los Angeles, CA"
                                     />
+                                    {formErrors.current_location_address && (
+                                        <p className="text-red-400 text-sm mt-1">{formErrors.current_location_address}</p>
+                                    )}
+                                    <p className="text-gray-500 text-xs mt-1">Format: City, State</p>
                                 </div>
+
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Pickup Location</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        Pickup Location <span className="text-red-400">*</span>
+                                    </label>
                                     <input
                                         type="text"
                                         name="pickup_location_address"
                                         value={formData.pickup_location_address}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white"
+                                        className={`w-full px-4 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white ${
+                                            formErrors.pickup_location_address ? 'border-red-500' : 'border-gray-600'
+                                        }`}
                                         placeholder="Fresno, CA"
                                     />
+                                    {formErrors.pickup_location_address && (
+                                        <p className="text-red-400 text-sm mt-1">{formErrors.pickup_location_address}</p>
+                                    )}
+                                    <p className="text-gray-500 text-xs mt-1">Format: City, State</p>
                                 </div>
+
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Dropoff Location</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        Dropoff Location <span className="text-red-400">*</span>
+                                    </label>
                                     <input
                                         type="text"
                                         name="dropoff_location_address"
                                         value={formData.dropoff_location_address}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white"
+                                        className={`w-full px-4 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white ${
+                                            formErrors.dropoff_location_address ? 'border-red-500' : 'border-gray-600'
+                                        }`}
                                         placeholder="New York, NY"
                                     />
+                                    {formErrors.dropoff_location_address && (
+                                        <p className="text-red-400 text-sm mt-1">{formErrors.dropoff_location_address}</p>
+                                    )}
+                                    <p className="text-gray-500 text-xs mt-1">Format: City, State</p>
                                 </div>
+
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Current Cycle Hours Used (0-70)</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        Current Cycle Hours Used (0-70) <span className="text-red-400">*</span>
+                                    </label>
                                     <input
                                         type="number"
                                         name="current_cycle_hours_used"
                                         value={formData.current_cycle_hours_used}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white"
+                                        className={`w-full px-4 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white ${
+                                            formErrors.current_cycle_hours_used ? 'border-red-500' : 'border-gray-600'
+                                        }`}
                                         min="0"
                                         max="70"
                                         step="0.1"
                                     />
+                                    {formErrors.current_cycle_hours_used && (
+                                        <p className="text-red-400 text-sm mt-1">{formErrors.current_cycle_hours_used}</p>
+                                    )}
                                 </div>
+
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Planned Start Time</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        Planned Start Time <span className="text-red-400">*</span>
+                                    </label>
                                     <input
                                         type="datetime-local"
                                         name="planned_start_time"
                                         value={formData.planned_start_time}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white"
+                                        className={`w-full px-4 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white ${
+                                            formErrors.planned_start_time ? 'border-red-500' : 'border-gray-600'
+                                        }`}
                                     />
+                                    {formErrors.planned_start_time && (
+                                        <p className="text-red-400 text-sm mt-1">{formErrors.planned_start_time}</p>
+                                    )}
                                 </div>
+
                                 <div className="flex gap-3 pt-4">
                                     <button
                                         onClick={handleSubmit}
-                                        className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:from-orange-600 hover:to-orange-700 font-medium transition-all"
+                                        disabled={isSubmitting}
+                                        className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
+                                            isSubmitting
+                                                ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                                : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700'
+                                        }`}
                                     >
-                                        Create Trip
+                                        {isSubmitting ? (
+                                            <span className="flex items-center justify-center gap-2">
+                    <div
+                        className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                    Creating...
+                </span>
+                                        ) : (
+                                            'Create Trip'
+                                        )}
                                     </button>
                                     <button
-                                        onClick={() => setShowCreateForm(false)}
-                                        className="px-6 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 font-medium transition-all"
+                                        onClick={() => {
+                                            setShowCreateForm(false);
+                                            setFormErrors({});
+                                        }}
+                                        disabled={isSubmitting}
+                                        className="px-6 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Cancel
                                     </button>
@@ -759,22 +910,24 @@ function App() {
                                         <h3 className="text-xl font-bold text-orange-400 group-hover:text-orange-300 transition-colors flex-1">
                                             {trip.trip_name}
                                         </h3>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(trip.status)} flex-shrink-0`}>
+                                        <span
+                                            className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(trip.status)} flex-shrink-0`}>
                       {trip.status}
                     </span>
                                     </div>
                                     <div className="space-y-3 mb-4 flex-grow">
                                         <div className="flex items-start gap-2 text-sm">
-                                            <MapPin className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                                            <MapPin className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0"/>
                                             <span className="text-gray-300">{trip.pickup_location_address}</span>
                                         </div>
                                         <div className="flex items-start gap-2 text-sm">
-                                            <MapPin className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                                            <MapPin className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0"/>
                                             <span className="text-gray-300">{trip.dropoff_location_address}</span>
                                         </div>
                                     </div>
                                     {trip.total_distance_miles && (
-                                        <div className="flex gap-4 text-sm text-gray-400 mb-4 pb-4 border-b border-gray-700">
+                                        <div
+                                            className="flex gap-4 text-sm text-gray-400 mb-4 pb-4 border-b border-gray-700">
                                             <span>🛣️ {trip.total_distance_miles.toLocaleString()} mi</span>
                                             <span>📅 {trip.days_required} days</span>
                                         </div>
@@ -786,14 +939,14 @@ function App() {
                                                     onClick={() => viewTripRoute(trip)}
                                                     className="flex-1 px-4 py-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-all flex items-center justify-center gap-2"
                                                 >
-                                                    <Navigation className="w-4 h-4" />
+                                                    <Navigation className="w-4 h-4"/>
                                                     Route
                                                 </button>
                                                 <button
                                                     onClick={() => viewTripLogs(trip)}
                                                     className="flex-1 px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-all flex items-center justify-center gap-2"
                                                 >
-                                                    <FileText className="w-4 h-4" />
+                                                    <FileText className="w-4 h-4"/>
                                                     Logs
                                                 </button>
                                             </>
@@ -809,12 +962,13 @@ function App() {
                                             >
                                                 {generatingRouteForTrip === trip.id ? (
                                                     <>
-                                                        <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                                        <div
+                                                            className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
                                                         Generating Route...
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Navigation className="w-4 h-4" />
+                                                        <Navigation className="w-4 h-4"/>
                                                         Generate Route
                                                     </>
                                                 )}
