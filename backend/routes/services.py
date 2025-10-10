@@ -94,45 +94,112 @@ class MapBoxService:
         Find nearest rest area, gas station, or parking near a coordinate
         stop_type: 'rest', 'fuel', 'break'
         """
-        # Search terms based on stop type
-        search_queries = {
-            'rest': 'rest area,truck stop,travel plaza',
-            'fuel': 'gas station,truck stop,fuel',
-            'break': 'rest area,truck stop,parking,hotel'
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Different search strategies based on stop type
+        search_strategies = {
+            'rest': [
+                'truck stop',
+                'rest area',
+                'travel center',
+                'parking'
+            ],
+            'fuel': [
+                'gas station',
+                'fuel',
+                'truck stop',
+                'service station'
+            ],
+            'break': [
+                'hotel',
+                'motel',
+                'truck stop',
+                'rest area'
+            ]
         }
 
-        query = search_queries.get(stop_type, 'rest area')
+        queries = search_strategies.get(stop_type, ['truck stop'])
 
-        url = f"{self.BASE_URL}/geocoding/v5/mapbox.places/{query}.json"
-        params = {
-            'access_token': self.access_token,
-            'proximity': f"{lng},{lat}",
-            'limit': 5,
-            'types': 'poi'
-        }
-
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
-
-        if not data.get('features'):
-            # Fallback to just "parking" or estimated location
-            return {
-                'address': f"Rest Stop (estimated near {lat:.4f}, {lng:.4f})",
-                'latitude': lat,
-                'longitude': lng,
-                'place_id': ''
+        # Try each query until we find results
+        for query in queries:
+            url = f"{self.BASE_URL}/geocoding/v5/mapbox.places/{query}.json"
+            params = {
+                'access_token': self.access_token,
+                'proximity': f"{lng},{lat}",
+                'limit': 1,
+                'types': 'poi',  # Points of Interest
+                'language': 'en'
             }
 
-        # Get the closest result
-        feature = data['features'][0]
-        coords = feature['geometry']['coordinates']
+            try:
+                response = requests.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
 
+                logger.info(f"Mapbox search for '{query}' at ({lat}, {lng}): {len(data.get('features', []))} results")
+
+                if data.get('features') and len(data['features']) > 0:
+                    # Found a result!
+                    feature = data['features'][0]
+                    coords = feature['geometry']['coordinates']
+                    place_name = feature.get('place_name', feature.get('text', 'Unknown location'))
+
+                    logger.info(f"Found place: {place_name}")
+
+                    return {
+                        'address': place_name,
+                        'latitude': coords[1],
+                        'longitude': coords[0],
+                        'place_id': feature.get('id', '')
+                    }
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Mapbox API error for query '{query}': {e}")
+                continue
+
+        # If we get here, no results were found with any query
+        # Fallback: try reverse geocoding to at least get city/state
+        try:
+            url = f"{self.BASE_URL}/geocoding/v5/mapbox.places/{lng},{lat}.json"
+            params = {
+                'access_token': self.access_token,
+                'types': 'place,locality',
+                'limit': 1
+            }
+
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get('features'):
+                location_name = data['features'][0].get('place_name', 'Unknown location')
+                logger.info(f"Using reverse geocoded location: {location_name}")
+
+                # Create a more informative fallback message
+                stop_type_label = {
+                    'rest': 'Rest Stop',
+                    'fuel': 'Fuel Stop',
+                    'break': 'Rest Area'
+                }.get(stop_type, 'Stop')
+
+                return {
+                    'address': f"{stop_type_label} near {location_name}",
+                    'latitude': lat,
+                    'longitude': lng,
+                    'place_id': ''
+                }
+
+        except Exception as e:
+            logger.error(f"Reverse geocoding failed: {e}")
+
+        # Ultimate fallback
+        logger.warning(f"No location found for {stop_type} at ({lat}, {lng}), using coordinates")
         return {
-            'address': feature.get('place_name', 'Rest Area'),
-            'latitude': coords[1],
-            'longitude': coords[0],
-            'place_id': feature.get('id', '')
+            'address': f"Rest Stop (estimated near {lat:.4f}, {lng:.4f})",
+            'latitude': lat,
+            'longitude': lng,
+            'place_id': ''
         }
 
     def get_point_along_route(self, geometry: Dict, distance_miles: float, total_distance_miles: float) -> Tuple[float, float]:
@@ -272,7 +339,7 @@ class RouteGenerationService:
             'duration_minutes': 0,
             'description': 'Trip start location'
         })
-
+        # TODO: Fix time display in frontend
         # Stop 1: Pickup location
         leg_0 = base_route['legs'][0]
         drive_time_hours = leg_0['duration'] / 3600

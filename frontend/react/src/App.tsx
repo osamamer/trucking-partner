@@ -325,6 +325,7 @@ function App() {
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
     const [trips, setTrips] = useState<Trip[]>(mockTrips);
     const [showCreateForm, setShowCreateForm] = useState(false);
+    const [errorToast, setErrorToast] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchTrips = async () => {
@@ -441,21 +442,54 @@ function App() {
             console.log('Route generation response status:', response.status);
 
             if (!response.ok) {
-                const errorData = await response.text();
-                console.error('Error response:', errorData);
-                throw new Error(`HTTP error! status: ${response.status}`);
+                let errorMessage = 'The requested route cannot be generated at this time.';
+
+                try {
+                    const errorData = await response.json();
+                    console.error('Error response:', errorData);
+
+                    errorMessage = errorData.error ||
+                        errorData.message ||
+                        errorData.detail ||
+                        (typeof errorData === 'string' ? errorData : errorMessage);
+                } catch {
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    if (errorText) errorMessage = errorText;
+                }
+
+                if (response.status === 400) {
+                    errorMessage = errorMessage || 'This trip configuration is not feasible. Please check your destinations and try again.';
+                } else if (response.status === 404) {
+                    errorMessage = 'Trip not found. Please refresh and try again.';
+                } else if (response.status === 500) {
+                    errorMessage = errorMessage || 'Our route planning service encountered an issue. Please try again in a moment.';
+                }
+
+                setErrorToast(errorMessage);
+                setTimeout(() => setErrorToast(null), 6000); // Auto-dismiss after 6 seconds
+
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
             console.log('Route generated successfully:', data);
 
-            // Optionally refresh the trip data here
+            const updatedTrips = await getAllTrips();
+            setTrips(updatedTrips);
+
         } catch (error) {
             console.error('Failed to generate route:', error);
-            alert('Failed to generate route. Check console for details.');
+
+            if (!errorToast) {
+                const errorMessage = error instanceof Error
+                    ? error.message
+                    : 'An unexpected error occurred while generating your route.';
+                setErrorToast(errorMessage);
+                setTimeout(() => setErrorToast(null), 6000);
+            }
         }
     };
-
     const viewTripRoute = async (trip: Trip) => {
         console.log('=== viewTripRoute called ===');
         console.log('Trip from list:', trip);
@@ -492,9 +526,44 @@ function App() {
         setSelectedTrip(trip);
         setActiveView('logs');
     };
+    const ErrorToast = () => {
+        if (!errorToast) return null;
 
+        return (
+            <div className="fixed top-20 right-4 max-w-md animate-slide-in z-[100]">
+                <div className="bg-gray-800 rounded-xl shadow-2xl border border-red-500/30 overflow-hidden">
+                    <div className="flex items-start p-4 gap-3">
+                        <div className="flex-shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                                <AlertCircle className="w-5 h-5 text-red-400" />
+                            </div>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                            <h3 className="text-sm font-semibold text-white mb-1">
+                                Unable to Generate Route
+                            </h3>
+                            <p className="text-sm text-gray-300 leading-relaxed">
+                                {errorToast}
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={() => setErrorToast(null)}
+                            className="flex-shrink-0 text-gray-400 hover:text-gray-200 transition-colors"
+                        >
+                            <span className="text-2xl leading-none">×</span>
+                        </button>
+                    </div>
+
+                    <div className="h-1 bg-gradient-to-r from-red-500 to-orange-500" />
+                </div>
+            </div>
+        );
+    };
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100">
+        <div className="min-h-screen bg-gradient-to-br from-gray-800 via-gray-900 to-gray-800 text-gray-100">
+            <ErrorToast/>
             <header className="bg-gray-800/50 backdrop-blur-sm border-b border-orange-500/20 sticky top-0 z-50">
                 <div className="container mx-auto px-4 py-4 max-w-full">
                     <div className="flex items-center justify-between flex-wrap gap-4">
