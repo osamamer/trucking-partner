@@ -417,9 +417,9 @@ function App() {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const data = await response.json();
-            console.log('Trip created successfully:', data);
-
+            const newTrip = await response.json();
+            console.log('Trip created successfully:', newTrip);
+            setTrips(prevTrips => [...prevTrips, newTrip]);
             setShowCreateForm(false);
             // Optionally refresh trips list here
         } catch (error) {
@@ -456,9 +456,36 @@ function App() {
         }
     };
 
-    const viewTripRoute = (trip: Trip) => {
-        setSelectedTrip({ ...trip, route: mockRoute });
-        setActiveView('route');
+    const viewTripRoute = async (trip: Trip) => {
+        console.log('=== viewTripRoute called ===');
+        console.log('Trip from list:', trip);
+        console.log('Trip.route from list:', trip.route);
+
+        try {
+            console.log(`Fetching: ${API_BASE_URL}/trips/${trip.id}/`);
+            const response = await fetch(`${API_BASE_URL}/trips/${trip.id}/`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const tripWithRoute = await response.json();
+            console.log('Trip from API:', tripWithRoute);
+            console.log('Trip.route from API:', tripWithRoute.route);
+
+            if (!tripWithRoute.route) {
+                console.log('No route found in API response');
+                alert('This trip does not have a route yet. Please generate one first.');
+                return;
+            }
+
+            console.log('✅ Setting selected trip with route');
+            setSelectedTrip(tripWithRoute);
+            setActiveView('route');
+        } catch (error) {
+            console.error('Failed to fetch trip route:', error);
+            alert('Failed to load trip route. Check console for details.');
+        }
     };
 
     const viewTripLogs = (trip: Trip) => {
@@ -675,7 +702,7 @@ function App() {
                     </div>
                 )}
 
-                {activeView === 'route' && selectedTrip?.route && (
+                {activeView === 'route' && selectedTrip && (
                     <div>
                         <button
                             onClick={() => setActiveView('trips')}

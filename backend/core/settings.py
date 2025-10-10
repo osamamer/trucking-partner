@@ -28,7 +28,7 @@ SECRET_KEY = "django-insecure-y_eu20_0dm46i33!5**pqj@===6g2=42=!z6pz^w!jd40d@kmk
 DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
-MAPBOX_ACCESS_TOKEN = 'your_mapbox_token_here'
+MAPBOX_ACCESS_TOKEN = 'pk.eyJ1Ijoib3NhbWFhbWVyIiwiYSI6ImNtZ2pyMzdyZDBmcGYybHIwM3lhZm94c3MifQ.P8N7prGgak8NWqB1tGdIDw'
 # Application definition
 
 INSTALLED_APPS = [
@@ -109,7 +109,7 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
-
+# TODO: Prepare for production
 # Add to your CORS settings section
 CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",

@@ -220,6 +220,7 @@ class RouteGenerationService:
         self.trip.save()
 
     def _check_feasibility(self) -> bool:
+        # TODO: If start time is after his cycle is over, allow it to be feasible
         """Check if driver has enough hours to complete trip"""
         hours_available = HOSRules.MAX_HOURS_PER_CYCLE - self.trip.current_cycle_hours_used
 
