@@ -37,6 +37,7 @@ ALLOWED_HOSTS = [
 
 MAPBOX_ACCESS_TOKEN = os.getenv('MAPBOX_TOKEN')
 
+
 # Application definition
 
 INSTALLED_APPS = [
