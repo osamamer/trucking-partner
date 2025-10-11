@@ -8,42 +8,27 @@ class LogEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = LogEntry
         fields = [
-            'id',
-            'duty_status',
-            'duty_status_display',
-            'start_time',
-            'end_time',
-            'duration_minutes',
-            'location',
-            'latitude',
-            'longitude',
-            'remarks'
+            'id', 'duty_status', 'duty_status_display',
+            'start_time', 'end_time', 'duration_minutes',
+            'location', 'remarks'
         ]
-
 
 class DailyLogSerializer(serializers.ModelSerializer):
     entries = LogEntrySerializer(many=True, read_only=True)
+
     class Meta:
         model = DailyLog
         fields = [
-            'id',
-            'day_number',
-            'log_date',
-            'total_driving_hours',
-            'total_on_duty_hours',
-            'total_off_duty_hours',
-            'total_sleeper_berth_hours',
-            'start_location',
-            'end_location',
-            'total_miles',
-            'is_compliant',
-            'violations',
-            'log_grid_data',
-            'entries'
+            'id', 'day_number', 'log_date',
+            'total_driving_hours', 'total_on_duty_hours',
+            'total_off_duty_hours', 'start_location',
+            'end_location', 'total_miles', 'entries'
         ]
 
 
 class DailyLogListSerializer(serializers.ModelSerializer):
+    entries = LogEntrySerializer(many=True, read_only=True)  # Add this line
+
     class Meta:
         model = DailyLog
         fields = [
@@ -56,5 +41,6 @@ class DailyLogListSerializer(serializers.ModelSerializer):
             'start_location',
             'end_location',
             'total_miles',
-            'is_compliant'
+            'is_compliant',
+            'entries'
         ]

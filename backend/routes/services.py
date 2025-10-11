@@ -1,6 +1,8 @@
 # routes/services.py
 import json
+import zoneinfo
 from asyncio import timeout
+from collections import defaultdict
 from webbrowser import open_new
 
 import requests
@@ -12,6 +14,8 @@ from trips.models import Trip
 from .models import Route, Stop
 from logs.models import DailyLog, LogEntry
 import logging
+from logs.models import LogEntry
+
 logger = logging.getLogger(__name__)
 
 # HOS Rules Configuration
@@ -216,9 +220,22 @@ class RouteGenerationService:
 
     def __init__(self, trip: Trip):
         self.trip = trip
-        self.mapbox = MapBoxService()
+        self.mapbox = MapBoxService()  # No parameters needed
         self.stops = []
-        self.current_time = trip.planned_start_time
+
+        # Set timezone based on user location (Jordan = Asia/Amman)
+        self.timezone = zoneinfo.ZoneInfo('Asia/Amman')
+
+        # Ensure start time is timezone-aware
+        if trip.planned_start_time.tzinfo is None:
+            # Naive datetime - assume it's in local time and make it aware
+            from django.utils import timezone as django_tz
+            self.current_time = django_tz.make_aware(trip.planned_start_time, timezone=self.timezone)
+        else:
+            # Already aware - convert to local timezone
+            self.current_time = trip.planned_start_time.astimezone(self.timezone)
+
+        # Store initial state
         self.cumulative_miles = 0
         self.daily_driving_hours = 0
         self.daily_on_duty_hours = 0
@@ -542,125 +559,279 @@ class RouteGenerationService:
                 cumulative_miles=stop_data['cumulative_miles']
             )
 
-    def _generate_daily_logs(self, route: Route):
+    from collections import defaultdict
 
+    def _generate_daily_logs(self, route: Route):
         if not self.stops:
             return
 
-        stops_by_date = {}
+        stops_by_date = defaultdict(list)
+        drives_by_date = defaultdict(list)
 
-        for i, stop in enumerate(self.stops):
-            # Determine which dates this stop spans
-            arrival_date = stop['arrival_time'].date()
-            departure_date = stop['departure_time'].date()
+        for i in range(len(self.stops)):
+            stop = self.stops[i]
+            arrival = stop['arrival_time']
+            departure = stop['departure_time']
+            tzinfo = arrival.tzinfo
 
-            # Add stop to arrival date
-            if arrival_date not in stops_by_date:
-                stops_by_date[arrival_date] = []
-            stops_by_date[arrival_date].append({
-                'stop': stop,
-                'stop_index': i,
-                'time_in_day': (stop['departure_time'] - stop['arrival_time']).total_seconds() / 3600
-                if arrival_date == departure_date
-                else (datetime.combine(arrival_date, datetime.max.time()).replace(tzinfo=stop['arrival_time'].tzinfo) - stop['arrival_time']).total_seconds() / 3600
-            })
+            start_date = arrival.date()
+            end_date = departure.date()
 
-            # If stop spans into next day, add it there too
-            if departure_date > arrival_date:
-                if departure_date not in stops_by_date:
-                    stops_by_date[departure_date] = []
-                stops_by_date[departure_date].append({
-                    'stop': stop,
+            current_date = start_date
+            while current_date <= end_date:
+                day_start = datetime.combine(current_date, datetime.min.time())
+                day_end = datetime.combine(current_date, datetime.max.time())
+                if tzinfo:
+                    day_start = day_start.replace(tzinfo=tzinfo)
+                    day_end = day_end.replace(tzinfo=tzinfo)
+
+                day_arrival = max(arrival, day_start)
+                day_departure = min(departure, day_end)
+
+                stops_by_date[current_date].append({
+                    'original_stop': stop,
                     'stop_index': i,
-                    'time_in_day': (stop['departure_time'] - datetime.combine(departure_date, datetime.min.time()).replace(tzinfo=stop['departure_time'].tzinfo)).total_seconds() / 3600
+                    'day_arrival': day_arrival,
+                    'day_departure': day_departure,
+                    'day_duration_hours': (day_departure - day_arrival).total_seconds() / 3600.0
                 })
 
-        # Create a log for each calendar day
-        sorted_dates = sorted(stops_by_date.keys())
+                current_date = current_date + timedelta(days=1)
 
+            if i > 0:
+                prev_stop = self.stops[i - 1]
+                drive_start = prev_stop['departure_time']
+                drive_end = stop['arrival_time']
+
+                if drive_end > drive_start:
+                    drive_start_date = drive_start.date()
+                    drive_end_date = drive_end.date()
+
+                    current_date = drive_start_date
+                    while current_date <= drive_end_date:
+                        day_start = datetime.combine(current_date, datetime.min.time())
+                        day_end = datetime.combine(current_date, datetime.max.time())
+                        if tzinfo:
+                            day_start = day_start.replace(tzinfo=tzinfo)
+                            day_end = day_end.replace(tzinfo=tzinfo)
+
+                        day_drive_start = max(drive_start, day_start)
+                        day_drive_end = min(drive_end, day_end)
+
+                        if day_drive_end > day_drive_start:
+                            drives_by_date[current_date].append({
+                                'from_stop_index': i - 1,
+                                'to_stop_index': i,
+                                'day_start': day_drive_start,
+                                'day_end': day_drive_end,
+                                'from_stop': prev_stop,
+                                'to_stop': stop
+                            })
+
+                        current_date = current_date + timedelta(days=1)
+
+        sorted_dates = sorted(set(list(stops_by_date.keys()) + list(drives_by_date.keys())))
         for day_number, log_date in enumerate(sorted_dates, start=1):
-            self._create_daily_log_for_date(route, day_number, log_date, stops_by_date[log_date])
+            self._create_daily_log_for_date(
+                route,
+                day_number,
+                log_date,
+                stops_by_date.get(log_date, []),
+                drives_by_date.get(log_date, [])
+            )
 
-        # Update trip with days required
         self.trip.days_required = len(sorted_dates)
         self.trip.save()
 
+    def _create_daily_log_for_date(self, route: Route, day_number: int, log_date, day_stop_info: List[Dict], day_drive_info: List[Dict]):
+        tzinfo = None
+        if day_stop_info:
+            tzinfo = day_stop_info[0]['day_arrival'].tzinfo
+        elif day_drive_info:
+            tzinfo = day_drive_info[0]['day_start'].tzinfo
 
-    def _create_daily_log_for_date(self, route: Route, day_number: int, log_date, day_stop_info: List[Dict]):
-
-        driving_hours = 0
-        on_duty_not_driving_hours = 0
-        off_duty_hours = 0
-        total_miles = 0
-
-        # Define the day boundaries
         day_start = datetime.combine(log_date, datetime.min.time())
         day_end = datetime.combine(log_date, datetime.max.time())
+        if tzinfo:
+            day_start = day_start.replace(tzinfo=tzinfo)
+            day_end = day_end.replace(tzinfo=tzinfo)
 
-        # Make timezone-aware if the stops are timezone-aware
-        if day_stop_info and day_stop_info[0]['stop']['arrival_time'].tzinfo:
-            day_start = day_start.replace(tzinfo=day_stop_info[0]['stop']['arrival_time'].tzinfo)
-            day_end = day_end.replace(tzinfo=day_stop_info[0]['stop']['arrival_time'].tzinfo)
+        day_entries = sorted(day_stop_info, key=lambda x: x['day_arrival'])
 
-        start_location = None
-        end_location = None
+        driving_hours = 0.0
+        on_duty_not_driving_hours = 0.0
+        off_duty_hours = 0.0
+        total_miles = 0.0
 
-        for i, stop_info in enumerate(day_stop_info):
-            stop = stop_info['stop']
+        for drive in day_drive_info:
+            drive_duration = (drive['day_end'] - drive['day_start']).total_seconds() / 3600.0
+            driving_hours += drive_duration
 
-            # Track locations
-            if start_location is None:
-                start_location = stop['address']
-            end_location = stop['address']
+            global_drive_duration = (drive['to_stop']['arrival_time'] - drive['from_stop']['departure_time']).total_seconds() / 3600.0
+            if global_drive_duration > 0:
+                drive_distance = drive['to_stop']['cumulative_miles'] - drive['from_stop']['cumulative_miles']
+                total_miles += drive_distance * (drive_duration / global_drive_duration)
 
-            # Calculate driving time to this stop (if not the first stop of the day)
-            if i > 0:
-                prev_stop = day_stop_info[i - 1]['stop']
+        for entry in day_entries:
+            orig = entry['original_stop']
+            stop_duration = entry['day_duration_hours']
+            stype = orig['stop_type']
 
-                # Only count drive time if it's between consecutive stops
-                if stop_info['stop_index'] == day_stop_info[i - 1]['stop_index'] + 1:
-                    # Calculate how much of the drive happened on this calendar day
-                    drive_start = max(prev_stop['departure_time'], day_start)
-                    drive_end = min(stop['arrival_time'], day_end)
-
-                    if drive_end > drive_start:
-                        drive_duration = (drive_end - drive_start).total_seconds() / 3600
-                        driving_hours += drive_duration
-
-                        # Calculate miles proportionally
-                        total_drive_duration = (stop['arrival_time'] - prev_stop['departure_time']).total_seconds() / 3600
-                        if total_drive_duration > 0:
-                            drive_distance = stop['cumulative_miles'] - prev_stop['cumulative_miles']
-                            miles_this_day = drive_distance * (drive_duration / total_drive_duration)
-                            total_miles += miles_this_day
-
-            # Calculate how much of this stop's duration falls on this calendar day
-            stop_start = max(stop['arrival_time'], day_start)
-            stop_end = min(stop['departure_time'], day_end)
-
-            if stop_end > stop_start:
-                stop_duration_hours = (stop_end - stop_start).total_seconds() / 3600
-
-                if stop['stop_type'] in ['pickup', 'dropoff', 'fuel']:
-                    on_duty_not_driving_hours += stop_duration_hours
-                elif stop['stop_type'] in ['30min_break', '10hr_break']:
-                    off_duty_hours += stop_duration_hours
+            if stype in ['pickup', 'dropoff', 'fuel']:
+                on_duty_not_driving_hours += stop_duration
+            elif stype in ['30min_break', '10hr_break']:
+                off_duty_hours += stop_duration
+            else:
+                off_duty_hours += stop_duration
 
         total_on_duty_hours = driving_hours + on_duty_not_driving_hours
-        total_off_duty_hours = 24 - total_on_duty_hours
+        total_off_duty_hours = 24.0 - total_on_duty_hours
 
-        DailyLog.objects.create(
+        daily_log = DailyLog.objects.create(
             trip=self.trip,
             day_number=day_number,
             log_date=log_date,
             total_driving_hours=round(driving_hours, 2),
             total_on_duty_hours=round(total_on_duty_hours, 2),
             total_off_duty_hours=round(total_off_duty_hours, 2),
-            start_location=start_location or 'N/A',
-            end_location=end_location or 'N/A',
+            start_location=day_entries[0]['original_stop']['address'] if day_entries else 'N/A',
+            end_location=day_entries[-1]['original_stop']['address'] if day_entries else 'N/A',
             total_miles=round(total_miles, 1),
             is_compliant=True
         )
+
+        self._create_log_entries_for_day(daily_log, day_start, day_end, day_entries, day_drive_info)
+
+    def _create_log_entries_for_day(self, daily_log, day_start, day_end, day_entries, day_drives):
+        entries = []
+        current_time = day_start
+
+        all_events = []
+
+        for drive in day_drives:
+            all_events.append({
+                'type': 'drive',
+                'time': drive['day_start'],
+                'data': drive
+            })
+
+        for entry in day_entries:
+            all_events.append({
+                'type': 'stop',
+                'time': entry['day_arrival'],
+                'data': entry
+            })
+
+        all_events.sort(key=lambda x: x['time'])
+
+        for event in all_events:
+            if event['type'] == 'drive':
+                drive = event['data']
+
+                if drive['day_start'] > current_time:
+                    entries.append({
+                        'duty_status': 'off_duty',
+                        'start_time': current_time,
+                        'end_time': drive['day_start'],
+                        'location': entries[-1]['location'] if entries else drive['from_stop']['address'],
+                        'latitude': entries[-1].get('latitude') if entries else drive['from_stop'].get('latitude'),
+                        'longitude': entries[-1].get('longitude') if entries else drive['from_stop'].get('longitude'),
+                        'remarks': 'Off duty'
+                    })
+                    current_time = drive['day_start']
+
+                entries.append({
+                    'duty_status': 'driving',
+                    'start_time': current_time,
+                    'end_time': drive['day_end'],
+                    'location': f"En route to {drive['to_stop']['address']}",
+                    'latitude': drive['to_stop'].get('latitude'),
+                    'longitude': drive['to_stop'].get('longitude'),
+                    'remarks': f"Driving from {drive['from_stop']['address']}"
+                })
+                current_time = drive['day_end']
+
+            else:
+                entry = event['data']
+                arrival = entry['day_arrival']
+                departure = entry['day_departure']
+                orig = entry['original_stop']
+
+                if arrival > current_time:
+                    entries.append({
+                        'duty_status': 'off_duty',
+                        'start_time': current_time,
+                        'end_time': arrival,
+                        'location': entries[-1]['location'] if entries else orig['address'],
+                        'latitude': entries[-1].get('latitude') if entries else orig.get('latitude'),
+                        'longitude': entries[-1].get('longitude') if entries else orig.get('longitude'),
+                        'remarks': 'Off duty'
+                    })
+                    current_time = arrival
+
+                if departure > current_time:
+                    duty_status_map = {
+                        'pickup': 'on_duty',
+                        'dropoff': 'on_duty',
+                        'fuel': 'on_duty',
+                        '30min_break': 'off_duty',
+                        '10hr_break': 'sleeper',
+                        'current': 'off_duty'
+                    }
+                    duty_status = duty_status_map.get(orig['stop_type'], 'off_duty')
+
+                    entries.append({
+                        'duty_status': duty_status,
+                        'start_time': current_time,
+                        'end_time': departure,
+                        'location': orig['address'],
+                        'latitude': orig.get('latitude'),
+                        'longitude': orig.get('longitude'),
+                        'remarks': orig.get('description', '')
+                    })
+                    current_time = departure
+
+        if current_time < day_end:
+            entries.append({
+                'duty_status': 'off_duty',
+                'start_time': current_time,
+                'end_time': day_end,
+                'location': entries[-1]['location'] if entries else 'N/A',
+                'latitude': entries[-1].get('latitude') if entries else None,
+                'longitude': entries[-1].get('longitude') if entries else None,
+                'remarks': 'Off duty'
+            })
+
+        for i, entry_data in enumerate(entries):
+            start = entry_data['start_time']
+            end = entry_data['end_time']
+
+            if end <= start:
+                logger.error(f"Invalid entry: {start} -> {end}")
+                continue
+
+            if i > 0:
+                prev_end = entries[i - 1]['end_time']
+                if start < prev_end:
+                    logger.error(f"OVERLAP: {start} < {prev_end}")
+                    continue
+                elif start > prev_end:
+                    gap = (start - prev_end).total_seconds()
+                    logger.error(f"GAP: {gap}s between entries")
+
+            duration_min = int((end - start).total_seconds() / 60)
+
+            LogEntry.objects.create(
+                daily_log=daily_log,
+                duty_status=entry_data['duty_status'],
+                start_time=start,
+                end_time=end,
+                duration_minutes=duration_min,
+                location=entry_data.get('location', ''),
+                latitude=entry_data.get('latitude'),
+                longitude=entry_data.get('longitude'),
+                remarks=entry_data.get('remarks', '')
+            )
 
     def _create_daily_log(self, route: Route, day_number: int, start_time: datetime, end_time: datetime, stops: List[Dict]):
         driving_hours = 0
