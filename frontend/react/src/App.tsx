@@ -4,9 +4,11 @@ import TripsView from "./components/TripsView.tsx";
 import LogsView from "./components/LogsView.tsx";
 import RoutesView from "./components/RoutesView.tsx";
 
-const API_BASE_URL = 'http://localhost:8000/api';
+export const API_BASE_URL = import.meta.env.MODE === 'production'
+    ? '/api'
+    : 'http://localhost:8000/api';
+
 export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
-// TODO: create README
 
 interface Location {
     address: string;

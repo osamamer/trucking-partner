@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 class TripViewSet(viewsets.ModelViewSet):
     """
-    Endpoints:
     - GET /api/trips/ - List all trips
     - POST /api/trips/ - Create a new trip
     - GET /api/trips/{id}/ - Get trip details

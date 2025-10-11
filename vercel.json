@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "backend/manage.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "15mb" }
+    },
+    {
+      "src": "frontend/react/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "frontend/react/dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "backend/manage.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "frontend/react/$1"
+    }
+  ]
+}
