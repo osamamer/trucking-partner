@@ -1,12 +1,11 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Truck, MapPin, Clock, AlertCircle, FileText, Plus, ChevronRight, Navigation} from 'lucide-react';
-import {ELDGrid} from './components/ELDGrid.tsx';
-import {MapboxRouteMap} from "./components/MapBoxRouteMap.tsx";
+import TripsView from "./components/TripsView.tsx";
+import LogsView from "./components/LogsView.tsx";
+import RoutesView from "./components/RoutesView.tsx";
 
 const API_BASE_URL = 'http://localhost:8000/api';
 export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
-// TODO: separate stuff into different packages
-// TODO: decide how to instantiate trips
 // TODO: create README
 
 interface Location {
@@ -36,7 +35,7 @@ export interface RouteData {
     stops: Stop[];
 }
 
-interface Trip {
+export interface Trip {
     id: number;
     trip_name: string;
     status: string;
@@ -74,132 +73,12 @@ interface LogEntry {
 
 
 
-const mockTrips: Trip[] = [
-    {
-        id: 1,
-        trip_name: "LA to NYC Cross-Country",
-        status: "completed",
-        created_at: "2025-10-08T10:00:00Z",
-        pickup_location_address: "Fresno, CA",
-        dropoff_location_address: "New York, NY",
-        total_distance_miles: 2789,
-        days_required: 4,
-    },
-    {
-        id: 2,
-        trip_name: "Denver to Seattle",
-        status: "planning",
-        created_at: "2025-10-09T14:30:00Z",
-        pickup_location_address: "Denver, CO",
-        dropoff_location_address: "Seattle, WA",
-        total_distance_miles: 1315,
-        days_required: 2,
-    }
-];
-
-const mockRoute: RouteData = {
-    id: 1,
-    total_distance_miles: 2789,
-    total_duration_hours: 52.3,
-    total_driving_hours: 41.2,
-    total_on_duty_hours: 45.5,
-    compliance_status: "compliant",
-    stops: [
-        {
-            sequence: 0,
-            location: {address: "Los Angeles, CA", latitude: 34.05, longitude: -118.24},
-            stop_type: "current",
-            stop_type_display: "Starting Point",
-            description: "Trip start location",
-            arrival_time: "2025-10-10T08:00:00Z",
-            departure_time: "2025-10-10T08:00:00Z",
-            duration_minutes: 0
-        },
-        {
-            sequence: 1,
-            location: {address: "Fresno, CA", latitude: 36.78, longitude: -119.42},
-            stop_type: "pickup",
-            stop_type_display: "Pickup",
-            description: "Load pickup (1 hour)",
-            arrival_time: "2025-10-10T11:30:00Z",
-            departure_time: "2025-10-10T12:30:00Z",
-            duration_minutes: 60
-        },
-        {
-            sequence: 2,
-            location: {address: "Rest Stop (estimated)", latitude: 0, longitude: 0},
-            stop_type: "30min_break",
-            stop_type_display: "30-Minute Break",
-            description: "Mandatory 30-minute break",
-            arrival_time: "2025-10-10T20:30:00Z",
-            departure_time: "2025-10-10T21:00:00Z",
-            duration_minutes: 30
-        },
-        {
-            sequence: 3,
-            location: {address: "Rest Area (estimated)", latitude: 0, longitude: 0},
-            stop_type: "10hr_break",
-            stop_type_display: "10-Hour Rest",
-            description: "Mandatory 10-hour off-duty rest period",
-            arrival_time: "2025-10-11T02:30:00Z",
-            departure_time: "2025-10-11T12:30:00Z",
-            duration_minutes: 600
-        },
-        {
-            sequence: 4,
-            location: {address: "Fuel Stop (estimated)", latitude: 0, longitude: 0},
-            stop_type: "fuel",
-            stop_type_display: "Fuel Stop",
-            description: "Refueling stop",
-            arrival_time: "2025-10-12T06:30:00Z",
-            departure_time: "2025-10-12T07:00:00Z",
-            duration_minutes: 30
-        },
-        {
-            sequence: 5,
-            location: {address: "New York, NY", latitude: 40.71, longitude: -74.00},
-            stop_type: "dropoff",
-            stop_type_display: "Dropoff",
-            description: "Load delivery (1 hour)",
-            arrival_time: "2025-10-13T14:00:00Z",
-            departure_time: "2025-10-13T15:00:00Z",
-            duration_minutes: 60
-        }
-    ]
-};
-
-const mockDailyLogs: DailyLog[] = [
-    {
-        id: 1,
-        day_number: 1,
-        log_date: "2025-10-10",
-        total_driving_hours: "11.0",
-        total_on_duty_hours: "2.5",
-        total_off_duty_hours: "10.5",
-        start_location: "Los Angeles, CA",
-        end_location: "Rest Area (estimated)",
-        total_miles: 605
-    },
-    {
-        id: 2,
-        day_number: 2,
-        log_date: "2025-10-11",
-        total_driving_hours: "10.5",
-        total_on_duty_hours: "1.0",
-        total_off_duty_hours: "12.5",
-        start_location: "Rest Area (estimated)",
-        end_location: "Rest Area (estimated)",
-        total_miles: 578
-    }
-];
-
-
 
 
 function App() {
     const [activeView, setActiveView] = useState<'trips' | 'create' | 'route' | 'logs'>('trips');
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
-    const [trips, setTrips] = useState<Trip[]>(mockTrips);
+    const [trips, setTrips] = useState<Trip[]>([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [errorToast, setErrorToast] = useState<string | null>(null);
     const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
@@ -226,40 +105,6 @@ function App() {
         planned_start_time: ''
     });
 
-    const formatDateTime = (dateStr: string) => {
-        return new Date(dateStr).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
-
-    const formatDateTimeShort = (dateStr: string) => {
-        return new Date(dateStr).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
-    const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
-
-    const formatTime = (dateStr: string) => {
-        return new Date(dateStr).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
 
     const getAllTrips = async () => {
         const response = await fetch(`${API_BASE_URL}/trips/`, {
@@ -293,16 +138,7 @@ function App() {
         }
     };
 
-    const getStopIcon = (stopType: string) => {
-        const icons: Record<string, string> = {
-            pickup: '📦',
-            dropoff: '🏁',
-            fuel: '⛽',
-            '30min_break': '☕',
-            '10hr_break': '🛏️'
-        };
-        return icons[stopType] || '📍';
-    };
+
 
     const getStatusColor = (status: string) => {
         const colors: Record<string, string> = {
@@ -791,295 +627,30 @@ function App() {
                 )}
 
                 {activeView === 'trips' && (
-                    <div>
-                        <div className="mb-6">
-                            <h2 className="text-3xl font-bold mb-2">Your Trips</h2>
-                            <p className="text-gray-400">Manage and view your planned trips</p>
-                        </div>
-                        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            {trips.map((trip) => (
-                                <div
-                                    key={trip.id}
-                                    className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 hover:border-orange-500/50 transition-all p-6 group flex flex-col"
-                                >
-                                    <div className="flex justify-between items-start mb-4 gap-2">
-                                        <h3 className="text-xl font-bold text-orange-400 group-hover:text-orange-300 transition-colors flex-1">
-                                            {trip.trip_name}
-                                        </h3>
-                                        <span
-                                            className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(trip.status)} flex-shrink-0`}>
-                      {trip.status}
-                    </span>
-                                    </div>
-                                    <div className="space-y-3 mb-4 flex-grow">
-                                        <div className="flex items-start gap-2 text-sm">
-                                            <MapPin className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0"/>
-                                            <span className="text-gray-300">{trip.pickup_location_address}</span>
-                                        </div>
-                                        <div className="flex items-start gap-2 text-sm">
-                                            <MapPin className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0"/>
-                                            <span className="text-gray-300">{trip.dropoff_location_address}</span>
-                                        </div>
-                                    </div>
-                                    {trip.total_distance_miles && (
-                                        <div
-                                            className="flex gap-4 text-sm text-gray-400 mb-4 pb-4 border-b border-gray-700">
-                                            <span>🛣️ {trip.total_distance_miles.toLocaleString()} mi</span>
-                                            <span>📅 {trip.days_required} days</span>
-                                        </div>
-                                    )}
-                                    <div className="flex gap-2">
-                                        {trip.total_distance_miles ? (
-                                            <>
-                                                <button
-                                                    onClick={() => viewTripRoute(trip)}
-                                                    className="flex-1 px-4 py-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-all flex items-center justify-center gap-2"
-                                                >
-                                                    <Navigation className="w-4 h-4"/>
-                                                    Route
-                                                </button>
-                                                <button
-                                                    onClick={() => viewTripLogs(trip)}
-                                                    className="flex-1 px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-all flex items-center justify-center gap-2"
-                                                >
-                                                    <FileText className="w-4 h-4"/>
-                                                    Logs
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <button
-                                                onClick={() => handleGenerateRoute(trip)}
-                                                disabled={generatingRouteForTrip === trip.id}
-                                                className={`w-full px-4 py-2 rounded-lg transition-all flex items-center justify-center gap-2 ${
-                                                    generatingRouteForTrip === trip.id
-                                                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                                                        : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700'
-                                                }`}
-                                            >
-                                                {generatingRouteForTrip === trip.id ? (
-                                                    <>
-                                                        <div
-                                                            className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                                                        Generating Route...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Navigation className="w-4 h-4"/>
-                                                        Generate Route
-                                                    </>
-                                                )}
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <TripsView
+                        trips={trips}
+                        generatingRouteForTrip={generatingRouteForTrip}
+                        viewTripRoute={viewTripRoute}
+                        viewTripLogs={viewTripLogs}
+                        handleGenerateRoute={handleGenerateRoute}
+                        getStatusColor={getStatusColor}
+                    />
                 )}
 
                 {activeView === 'route' && selectedTrip && (
-                    <div>
-                        <button
-                            onClick={() => setActiveView('trips')}
-                            className="mb-6 text-orange-400 hover:text-orange-300 flex items-center gap-2"
-                        >
-                            ← Back to Trips
-                        </button>
-                        <div
-                            className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-orange-500/20 p-6 mb-6">
-                            <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-                                {selectedTrip.trip_name}
-                            </h2>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="bg-gray-700/50 rounded-lg p-4">
-                                    <div className="text-gray-400 text-sm mb-1">Total Distance</div>
-                                    <div className="text-2xl font-bold text-orange-400">
-                                        {selectedTrip.route.total_distance_miles.toLocaleString()} mi
-                                    </div>
-                                </div>
-                                <div className="bg-gray-700/50 rounded-lg p-4">
-                                    <div className="text-gray-400 text-sm mb-1">Driving Hours</div>
-                                    <div className="text-2xl font-bold text-blue-400">
-                                        {selectedTrip.route.total_driving_hours.toFixed(1)} hrs
-                                    </div>
-                                </div>
-                                <div className="bg-gray-700/50 rounded-lg p-4">
-                                    <div className="text-gray-400 text-sm mb-1">Total Duration</div>
-                                    <div className="text-2xl font-bold text-purple-400">
-                                        {selectedTrip.route.total_duration_hours.toFixed(1)} hrs
-                                    </div>
-                                </div>
-                                <div className="bg-gray-700/50 rounded-lg p-4">
-                                    <div className="text-gray-400 text-sm mb-1">Compliance</div>
-                                    <div className="text-2xl font-bold text-green-400">
-                                        {selectedTrip.route.compliance_status === 'compliant' ? '✓' : '✗'}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-6 mb-6">
-                            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                                <MapPin className="w-5 h-5 text-orange-400"/>
-                                Route Map
-                            </h3>
-                            <MapboxRouteMap route={selectedTrip.route}/>
-                        </div>
-                        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-6">
-                            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                                <Navigation className="w-5 h-5 text-orange-400"/>
-                                Route Stops
-                            </h3>
-                            <div className="space-y-3">
-                                {selectedTrip.route.stops.map((stop, idx) => (
-                                    <div key={stop.sequence}>
-                                        <div
-                                            className="bg-gray-700/30 rounded-lg p-4 hover:bg-gray-700/50 transition-all">
-                                            <div className="flex items-start gap-4">
-                                                <div className="text-3xl">{getStopIcon(stop.stop_type)}</div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div
-                                                        className="flex justify-between items-start mb-2 flex-wrap gap-2">
-                                                        <div className="flex-1 min-w-0">
-                                                            <h4 className="font-bold text-orange-400">{stop.stop_type_display}</h4>
-                                                            <p className="text-sm text-gray-400 break-words">{stop.location.address}</p>
-                                                        </div>
-                                                        <span
-                                                            className="text-xs text-gray-500 flex-shrink-0">Stop {stop.sequence + 1}</span>
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-4 text-sm text-gray-400">
-    <span className="flex items-center gap-1">
-        <Clock className="w-4 h-4"/>
-        Arrive: {formatDateTimeShort(stop.arrival_time)}
-    </span>
-                                                        {stop.duration_minutes > 0 && (
-                                                            <>
-                                                                <span>Duration: {stop.duration_minutes} min</span>
-                                                                <span>Depart: {formatDateTimeShort(stop.departure_time)}</span>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                    {stop.description && (
-                                                        <p className="text-sm text-gray-500 mt-2">{stop.description}</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {idx < selectedTrip.route.stops.length - 1 && (
-                                            <div
-                                                className="ml-8 mt-2 pl-4 border-l-2 border-dashed border-orange-500/30 py-2">
-                                                <ChevronRight className="w-4 h-4 text-orange-500/50"/>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
+                    <RoutesView
+                        selectedTrip={selectedTrip}
+                        onBack={() => setActiveView('trips')}
+                    />
                 )}
 
                 {activeView === 'logs' && selectedTrip && (
-                    <div>
-                        <button
-                            onClick={() => setActiveView('trips')}
-                            className="mb-6 text-orange-400 hover:text-orange-300 flex items-center gap-2"
-                        >
-                            ← Back to Trips
-                        </button>
-                        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-orange-500/20 p-6 mb-6">
-                            <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-                                Daily Logs - {selectedTrip.trip_name}
-                            </h2>
-                            <p className="text-gray-400">ELD compliance logs for this trip</p>
-                        </div>
-
-                        {loadingLogs ? (
-                            <div className="text-center py-12">
-                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-                                <p className="text-gray-400 mt-4">Loading daily logs...</p>
-                            </div>
-                        ) : dailyLogs.length === 0 ? (
-                            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-8 text-center">
-                                <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-                                <h3 className="text-xl font-bold text-gray-300 mb-2">No Daily Logs Found</h3>
-                                <p className="text-gray-400">
-                                    This trip doesn't have any daily logs yet. Generate a route first to create logs.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-6">
-                                {dailyLogs.map((log) => (
-                                    <div key={log.id} className="space-y-4">
-                                        {/* Summary Card */}
-                                        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
-                                            <div className="flex justify-between items-start mb-4 flex-wrap gap-3">
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-orange-400">Day {log.day_number}</h3>
-                                                    <p className="text-sm text-gray-400">
-                                                        {new Date(log.log_date).toLocaleDateString('en-US', {
-                                                            weekday: 'short',
-                                                            month: 'short',
-                                                            day: 'numeric',
-                                                            year: 'numeric'
-                                                        })}
-                                                    </p>
-                                                </div>
-                                                <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
-                                    Compliant
-                                </span>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                                <div className="bg-gray-700/30 rounded-lg p-3">
-                                                    <div className="text-xs text-gray-400 mb-1">Driving</div>
-                                                    <div className="text-lg font-bold text-orange-400">
-                                                        {typeof log.total_driving_hours === 'number'
-                                                            ? log.total_driving_hours.toFixed(1)
-                                                            : log.total_driving_hours}h
-                                                    </div>
-                                                </div>
-                                                <div className="bg-gray-700/30 rounded-lg p-3">
-                                                    <div className="text-xs text-gray-400 mb-1">On-Duty</div>
-                                                    <div className="text-lg font-bold text-blue-400">
-                                                        {typeof log.total_on_duty_hours === 'number'
-                                                            ? log.total_on_duty_hours.toFixed(1)
-                                                            : log.total_on_duty_hours}h
-                                                    </div>
-                                                </div>
-                                                <div className="bg-gray-700/30 rounded-lg p-3">
-                                                    <div className="text-xs text-gray-400 mb-1">Off-Duty</div>
-                                                    <div className="text-lg font-bold text-green-400">
-                                                        {typeof log.total_off_duty_hours === 'number'
-                                                            ? log.total_off_duty_hours.toFixed(1)
-                                                            : log.total_off_duty_hours}h
-                                                    </div>
-                                                </div>
-                                                <div className="bg-gray-700/30 rounded-lg p-3">
-                                                    <div className="text-xs text-gray-400 mb-1">Miles</div>
-                                                    <div className="text-lg font-bold text-purple-400">
-                                                        {log.total_miles.toFixed(0)}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="border-t border-gray-700 pt-4">
-                                                <div className="flex flex-col sm:flex-row justify-between gap-2 text-sm">
-                                    <span className="text-gray-400">
-                                        Start: <span className="text-gray-300">{log.start_location}</span>
-                                    </span>
-                                                    <span className="text-gray-400">
-                                        End: <span className="text-gray-300">{log.end_location}</span>
-                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* ELD Grid */}
-                                        <ELDGrid log={log} />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    <LogsView
+                        selectedTrip={selectedTrip}
+                        onBack={() => setActiveView('trips')}
+                        dailyLogs={dailyLogs}
+                        loadingLogs={loadingLogs}
+                    />
                 )}
             </main>
         </div>
