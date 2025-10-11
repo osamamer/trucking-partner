@@ -3,10 +3,7 @@ from trips.models import Trip
 
 
 class DailyLog(models.Model):
-    """
-    ELD Daily Log - one per day of the trip
-    Complies with FMCSA regulations
-    """
+
     trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='daily_logs')
 
     # Day Info
@@ -54,10 +51,7 @@ class DailyLog(models.Model):
 
 
 class LogEntry(models.Model):
-    """
-    Individual duty status entry within a daily log
-    Used to generate the 24-hour grid
-    """
+
     DUTY_STATUS_CHOICES = [
         ('off_duty', 'Off Duty'),
         ('sleeper', 'Sleeper Berth'),

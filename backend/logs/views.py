@@ -9,7 +9,6 @@ from .serializers import DailyLogSerializer, DailyLogListSerializer, LogEntrySer
 
 class DailyLogViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    Endpoints:
     - GET /api/daily-logs/ - List all daily logs
     - GET /api/daily-logs/{id}/ - Get daily log details
     - GET /api/daily-logs/{id}/export/ - Export log as PDF/JSON
@@ -35,10 +34,6 @@ class DailyLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=['get'])
     def export(self, request, pk=None):
-        """
-        Export daily log in various formats
-        GET /api/daily-logs/{id}/export/?format=json|pdf
-        """
         daily_log = self.get_object()
         format_type = request.query_params.get('format', 'json')
 
@@ -62,8 +57,6 @@ class DailyLogViewSet(viewsets.ReadOnlyModelViewSet):
 
 class LogEntryViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for viewing log entries
-
     Endpoints:
     - GET /api/log-entries/ - List all log entries
     - GET /api/log-entries/{id}/ - Get log entry details

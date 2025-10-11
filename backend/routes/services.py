@@ -32,7 +32,6 @@ class HOSRules:
 
 
 class MapBoxService:
-    """Handles all MapBox API calls"""
     # todo proper bug handling for api errors
 
     BASE_URL = "https://api.mapbox.com"
@@ -95,13 +94,9 @@ class MapBoxService:
         }
 
     def find_nearest_stop_location(self, lat: float, lng: float, stop_type: str) -> Optional[Dict]:
-        """
-        Find nearest rest area, gas station, or parking near a coordinate
-        stop_type: 'rest', 'fuel', 'break'
-        """
 
+        # Find nearest rest area, gas station, or parking near a coordinate
 
-        # Different search strategies based on stop type
         search_strategies = {
             'rest': [
                 'truck stop',
@@ -135,7 +130,6 @@ class MapBoxService:
                 'types': 'poi',  # Points of Interest
                 'language': 'en'
             }
-
             try:
                 response = requests.get(url, params=params)
                 response.raise_for_status()
@@ -144,7 +138,6 @@ class MapBoxService:
                 logger.info(f"Mapbox search for '{query}' at ({lat}, {lng}): {len(data.get('features', []))} results")
 
                 if data.get('features') and len(data['features']) > 0:
-                    # Found a result!
                     feature = data['features'][0]
                     coords = feature['geometry']['coordinates']
                     place_name = feature.get('place_name', feature.get('text', 'Unknown location'))
@@ -162,8 +155,7 @@ class MapBoxService:
                 logger.error(f"Mapbox API error for query '{query}': {e}")
                 continue
 
-        # If we get here, no results were found with any query
-        # Fallback: try reverse geocoding to at least get city/state
+        #  try reverse geocoding to at least get city/state
         try:
             url = f"{self.BASE_URL}/geocoding/v5/mapbox.places/{lng},{lat}.json"
             params = {
@@ -171,7 +163,6 @@ class MapBoxService:
                 'types': 'place,locality',
                 'limit': 1
             }
-
             response = requests.get(url, params=params)
             response.raise_for_status()
             data = response.json()
@@ -180,7 +171,6 @@ class MapBoxService:
                 location_name = data['features'][0].get('place_name', 'Unknown location')
                 logger.info(f"Using reverse geocoded location: {location_name}")
 
-                # Create a more informative fallback message
                 stop_type_label = {
                     'rest': 'Rest Stop',
                     'fuel': 'Fuel Stop',
@@ -207,19 +197,11 @@ class MapBoxService:
         }
 
     def get_point_along_route(self, geometry: Dict, distance_miles: float, total_distance_miles: float) -> Tuple[float, float]:
-        """
-        Get lat/lng at a specific distance along the route
-        geometry: GeoJSON LineString from MapBox
-        distance_miles: how far along the route
-        total_distance_miles: total route distance
-        """
+        # Get lat/lng at a specific distance along the route
         coordinates = geometry['coordinates']
 
-        # Calculate the fraction of the route
-        fraction = distance_miles / total_distance_miles
+        fraction = distance_miles / total_distance_miles  # Calculate the fraction of the route
 
-        # Simple linear interpolation through the route points
-        # For production, you'd want proper distance calculation along the line
         total_points = len(coordinates)
         target_index = int(fraction * (total_points - 1))
 
@@ -231,7 +213,6 @@ class MapBoxService:
 
 
 class RouteGenerationService:
-    """Main service for generating HOS-compliant routes"""
 
     def __init__(self, trip: Trip):
         self.trip = trip
@@ -254,7 +235,6 @@ class RouteGenerationService:
 
         # Step 3: Get base route from MapBox
         base_route = self._get_base_route()
-        # TODO: fix this. Most of the bugs start here. The base route is fine, what happens after is messy.
         # Step 4: Generate all stops with HOS compliance
         self._generate_stops(base_route)
 
@@ -270,7 +250,6 @@ class RouteGenerationService:
         return route
 
     def _geocode_locations(self):
-        """Geocode all addresses"""
         if not self.trip.current_location_latitude:
             lat, lng = self.mapbox.geocode_address(self.trip.current_location_address)
             self.trip.current_location_latitude = lat
@@ -290,10 +269,8 @@ class RouteGenerationService:
 
     def _check_feasibility(self) -> bool:
         # TODO: If start time is after his cycle is over, allow it to be feasible
-        """Check if driver has enough hours to complete trip"""
         hours_available = HOSRules.MAX_HOURS_PER_CYCLE - self.trip.current_cycle_hours_used
 
-        # Get rough distance estimate
         waypoints = [
             (self.trip.current_location_latitude, self.trip.current_location_longitude),
             (self.trip.pickup_location_latitude, self.trip.pickup_location_longitude),
@@ -318,7 +295,6 @@ class RouteGenerationService:
         return True
 
     def _get_base_route(self) -> Dict:
-        """Get the base route from MapBox"""
         waypoints = [
             (self.trip.current_location_latitude, self.trip.current_location_longitude),
             (self.trip.pickup_location_latitude, self.trip.pickup_location_longitude),
@@ -328,9 +304,7 @@ class RouteGenerationService:
         return self.mapbox.get_route(waypoints)
 
     def _generate_stops(self, base_route: Dict):
-        """Generate all stops with HOS compliance"""
 
-        # Stop 0: Current location (starting point)
         self._add_stop({
             'type': 'current',
             'address': self.trip.current_location_address,
@@ -340,12 +314,11 @@ class RouteGenerationService:
             'description': 'Trip start location'
         })
 
-        # Drive to pickup location
         leg_0 = base_route['legs'][0]
         drive_time_hours = leg_0['duration'] / 3600
         drive_distance_miles = leg_0['distance'] * 0.000621371
 
-        # Advance time for driving to pickup using datetime
+        # Advance time for driving to pickup
         self.current_time += timedelta(hours=drive_time_hours)
         self.cumulative_miles += drive_distance_miles
         self.daily_driving_hours += drive_time_hours
@@ -353,7 +326,6 @@ class RouteGenerationService:
         self.hours_since_30min_break += drive_time_hours
         self.miles_since_fuel += drive_distance_miles
 
-        # Stop 1: Pickup location
         self._add_stop({
             'type': 'pickup',
             'address': self.trip.pickup_location_address,
@@ -374,7 +346,6 @@ class RouteGenerationService:
             total_leg_duration
         )
 
-        # Final Stop: Dropoff location
         self._add_stop({
             'type': 'dropoff',
             'address': self.trip.dropoff_location_address,
@@ -385,29 +356,24 @@ class RouteGenerationService:
         })
 
     def _traverse_route_with_stops(self, geometry: Dict, total_distance: float, total_duration: float):
-        """Traverse route from pickup to dropoff, inserting required stops"""
 
         distance_remaining = total_distance
         distance_covered_in_leg = 0
 
         while distance_remaining > 0:
-            # Check if we need a 30-min break (after 8 hours driving)
             if self.hours_since_30min_break >= HOSRules.REQUIRED_30MIN_BREAK_AFTER_HOURS:
                 self._insert_break_stop(geometry, distance_covered_in_leg, total_distance, '30min')
                 continue
 
-            # Check if we need a 10-hour rest (max 11h driving or 14h on-duty)
             if (self.daily_driving_hours >= HOSRules.MAX_DRIVING_HOURS_PER_DAY or
                     self.daily_on_duty_hours >= HOSRules.MAX_ON_DUTY_HOURS_PER_DAY):
                 self._insert_break_stop(geometry, distance_covered_in_leg, total_distance, '10hr')
                 continue
 
-            # Check if we need fuel (every 1000 miles)
             if self.miles_since_fuel >= HOSRules.FUEL_STOP_INTERVAL_MILES:
                 self._insert_fuel_stop(geometry, distance_covered_in_leg, total_distance)
                 continue
 
-            # Calculate how far we can drive before next stop is needed
             hours_until_break = HOSRules.REQUIRED_30MIN_BREAK_AFTER_HOURS - self.hours_since_30min_break
             hours_until_daily_limit = min(
                 HOSRules.MAX_DRIVING_HOURS_PER_DAY - self.daily_driving_hours,
@@ -418,7 +384,6 @@ class RouteGenerationService:
             hours_can_drive = min(hours_until_break, hours_until_daily_limit)
             miles_can_drive = min(hours_can_drive * HOSRules.AVERAGE_SPEED_MPH, miles_until_fuel, distance_remaining)
 
-            # Drive this segment using datetime
             hours_to_drive = miles_can_drive / HOSRules.AVERAGE_SPEED_MPH
 
             self.current_time += timedelta(hours=hours_to_drive)
@@ -432,7 +397,6 @@ class RouteGenerationService:
             distance_remaining -= miles_can_drive
 
     def _insert_break_stop(self, geometry: Dict, distance_along_leg: float, total_leg_distance: float, break_type: str):
-        """Insert a 30-min break or 10-hour rest stop"""
 
         # Get location along route
         lat, lng = self.mapbox.get_point_along_route(geometry, distance_along_leg, total_leg_distance)
@@ -451,7 +415,6 @@ class RouteGenerationService:
                 'place_id': stop_location.get('place_id', '')
             })
 
-            # Reset 30-min break timer (break is on-duty not driving)
             self.daily_on_duty_hours += HOSRules.BREAK_30MIN_DURATION / 60
             self.hours_since_30min_break = 0
 
@@ -473,12 +436,8 @@ class RouteGenerationService:
             self.hours_since_30min_break = 0
 
     def _insert_fuel_stop(self, geometry: Dict, distance_along_leg: float, total_leg_distance: float):
-        """Insert a fuel stop"""
 
-        # Get location along route
         lat, lng = self.mapbox.get_point_along_route(geometry, distance_along_leg, total_leg_distance)
-
-        # Find nearest gas station
         stop_location = self.mapbox.find_nearest_stop_location(lat, lng, 'fuel')
 
         self._add_stop({
@@ -491,11 +450,9 @@ class RouteGenerationService:
             'place_id': stop_location.get('place_id', '')
         })
 
-        # Reset fuel counter (time and on-duty hours already handled by _add_stop)
         self.miles_since_fuel = 0
 
     def _add_stop(self, stop_data: Dict):
-        """Add a stop to the list - arrival time is current_time"""
         arrival_time = self.current_time
         departure_time = arrival_time + timedelta(minutes=stop_data['duration_minutes'])
 
@@ -513,7 +470,7 @@ class RouteGenerationService:
             'cumulative_miles': self.cumulative_miles
         })
 
-        # Update current_time to departure time using datetime
+        # Update current_time to departure time
         self.current_time = departure_time
 
         # Update on-duty hours for non-driving activities
@@ -522,7 +479,6 @@ class RouteGenerationService:
             self.daily_on_duty_hours += hours
 
     def _advance_time(self, hours: float, miles: float, is_driving: bool):
-        """Advance time and update counters"""
         self.current_time += timedelta(hours=hours)
         self.cumulative_miles += miles
 
@@ -536,7 +492,6 @@ class RouteGenerationService:
             self.daily_on_duty_hours += hours
 
     def _create_route(self, base_route: Dict) -> Route:
-        """Create the Route model"""
 
         total_driving_hours = sum(
             (s['departure_time'] - s['arrival_time']).total_seconds() / 3600
@@ -565,7 +520,6 @@ class RouteGenerationService:
         return route
 
     def _create_stops(self, route: Route):
-        """Create Stop models"""
 
         for i, stop_data in enumerate(self.stops):
             miles_from_previous = 0
@@ -589,12 +543,10 @@ class RouteGenerationService:
             )
 
     def _generate_daily_logs(self, route: Route):
-        """Generate daily log entries for the trip - one log per calendar day"""
 
         if not self.stops:
             return
 
-        # Group stops by calendar date
         stops_by_date = {}
 
         for i, stop in enumerate(self.stops):
@@ -635,7 +587,6 @@ class RouteGenerationService:
 
 
     def _create_daily_log_for_date(self, route: Route, day_number: int, log_date, day_stop_info: List[Dict]):
-        """Create a daily log for a specific calendar date"""
 
         driving_hours = 0
         on_duty_not_driving_hours = 0
@@ -654,7 +605,6 @@ class RouteGenerationService:
         start_location = None
         end_location = None
 
-        # Process all stops that occur on this date
         for i, stop_info in enumerate(day_stop_info):
             stop = stop_info['stop']
 
@@ -696,10 +646,7 @@ class RouteGenerationService:
                 elif stop['stop_type'] in ['30min_break', '10hr_break']:
                     off_duty_hours += stop_duration_hours
 
-        # Total on-duty hours
         total_on_duty_hours = driving_hours + on_duty_not_driving_hours
-
-        # Remaining time in the 24-hour period is off-duty
         total_off_duty_hours = 24 - total_on_duty_hours
 
         DailyLog.objects.create(
@@ -716,9 +663,6 @@ class RouteGenerationService:
         )
 
     def _create_daily_log(self, route: Route, day_number: int, start_time: datetime, end_time: datetime, stops: List[Dict]):
-        """Create a single daily log"""
-
-        # Calculate hours
         driving_hours = 0
         on_duty_hours = 0
         off_duty_hours = 0
@@ -732,7 +676,6 @@ class RouteGenerationService:
             elif stop['stop_type'] in ['30min_break', '10hr_break']:
                 off_duty_hours += duration_hours
 
-            # Calculate driving time to this stop
             if i > 0:
                 prev_stop = stops[i-1]
                 drive_time = (stop['arrival_time'] - prev_stop['departure_time']).total_seconds() / 3600
@@ -758,14 +701,9 @@ class RouteGenerationService:
         )
 
 
-# Main function to call from views
+#  function to call from views
 def generate_route_for_trip(trip_id: int) -> Route:
-    """
-    Generate a complete HOS-compliant route for a trip
-    
-    Usage:
-        route = generate_route_for_trip(trip.id)
-    """
+
     try:
         trip = Trip.objects.get(id=trip_id)
         service = RouteGenerationService(trip)

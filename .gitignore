@@ -2,3 +2,6 @@
 **/venv
 **/.venv
 *.iml
+.env
+frontend/react/.env
+**/.env*

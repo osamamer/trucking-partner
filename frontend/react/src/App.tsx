@@ -1,10 +1,9 @@
 import React, {useEffect, useRef, useState} from 'react';
-import { Truck, MapPin, Clock, AlertCircle, FileText, Plus, ChevronRight, Navigation } from 'lucide-react';
+import {Truck, MapPin, Clock, AlertCircle, FileText, Plus, ChevronRight, Navigation} from 'lucide-react';
 
-// TODO: move these into environment variables
-const MAPBOX_TOKEN = 'pk.eyJ1Ijoib3NhbWFhbWVyIiwiYSI6ImNtZ2pyMzdyZDBmcGYybHIwM3lhZm94c3MifQ.P8N7prGgak8NWqB1tGdIDw';
+
 const API_BASE_URL = 'http://localhost:8000/api';
-
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 // TODO: separate stuff into different packages
 
 // Types
@@ -92,7 +91,7 @@ const mockRoute: RouteData = {
     stops: [
         {
             sequence: 0,
-            location: { address: "Los Angeles, CA", latitude: 34.05, longitude: -118.24 },
+            location: {address: "Los Angeles, CA", latitude: 34.05, longitude: -118.24},
             stop_type: "current",
             stop_type_display: "Starting Point",
             description: "Trip start location",
@@ -102,7 +101,7 @@ const mockRoute: RouteData = {
         },
         {
             sequence: 1,
-            location: { address: "Fresno, CA", latitude: 36.78, longitude: -119.42 },
+            location: {address: "Fresno, CA", latitude: 36.78, longitude: -119.42},
             stop_type: "pickup",
             stop_type_display: "Pickup",
             description: "Load pickup (1 hour)",
@@ -112,7 +111,7 @@ const mockRoute: RouteData = {
         },
         {
             sequence: 2,
-            location: { address: "Rest Stop (estimated)", latitude: 0, longitude: 0 },
+            location: {address: "Rest Stop (estimated)", latitude: 0, longitude: 0},
             stop_type: "30min_break",
             stop_type_display: "30-Minute Break",
             description: "Mandatory 30-minute break",
@@ -122,7 +121,7 @@ const mockRoute: RouteData = {
         },
         {
             sequence: 3,
-            location: { address: "Rest Area (estimated)", latitude: 0, longitude: 0 },
+            location: {address: "Rest Area (estimated)", latitude: 0, longitude: 0},
             stop_type: "10hr_break",
             stop_type_display: "10-Hour Rest",
             description: "Mandatory 10-hour off-duty rest period",
@@ -132,7 +131,7 @@ const mockRoute: RouteData = {
         },
         {
             sequence: 4,
-            location: { address: "Fuel Stop (estimated)", latitude: 0, longitude: 0 },
+            location: {address: "Fuel Stop (estimated)", latitude: 0, longitude: 0},
             stop_type: "fuel",
             stop_type_display: "Fuel Stop",
             description: "Refueling stop",
@@ -142,7 +141,7 @@ const mockRoute: RouteData = {
         },
         {
             sequence: 5,
-            location: { address: "New York, NY", latitude: 40.71, longitude: -74.00 },
+            location: {address: "New York, NY", latitude: 40.71, longitude: -74.00},
             stop_type: "dropoff",
             stop_type_display: "Dropoff",
             description: "Load delivery (1 hour)",
@@ -179,9 +178,8 @@ const mockDailyLogs: DailyLog[] = [
 ];
 
 
-
 // MapBox Route Component
-const MapboxRouteMap: React.FC<{ route: RouteData }> = ({ route }) => {
+const MapboxRouteMap: React.FC<{ route: RouteData }> = ({route}) => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<any>(null);
 
@@ -259,20 +257,20 @@ const MapboxRouteMap: React.FC<{ route: RouteData }> = ({ route }) => {
 
                 // Set marker color and icon based on stop type
                 const markerStyles: Record<string, { bg: string; icon: string }> = {
-                    current: { bg: '#3b82f6', icon: '🚛' },
-                    pickup: { bg: '#10b981', icon: '📦' },
-                    dropoff: { bg: '#ef4444', icon: '🏁' },
-                    fuel: { bg: '#f59e0b', icon: '⛽' },
-                    '30min_break': { bg: '#8b5cf6', icon: '☕' },
-                    '10hr_break': { bg: '#6366f1', icon: '🛏️' }
+                    current: {bg: '#3b82f6', icon: '🚛'},
+                    pickup: {bg: '#10b981', icon: '📦'},
+                    dropoff: {bg: '#ef4444', icon: '🏁'},
+                    fuel: {bg: '#f59e0b', icon: '⛽'},
+                    '30min_break': {bg: '#8b5cf6', icon: '☕'},
+                    '10hr_break': {bg: '#6366f1', icon: '🛏️'}
                 };
 
-                const style = markerStyles[stop.stop_type] || { bg: '#6b7280', icon: '📍' };
+                const style = markerStyles[stop.stop_type] || {bg: '#6b7280', icon: '📍'};
                 el.style.backgroundColor = style.bg;
                 el.innerHTML = style.icon;
 
                 // Create popup
-                const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+                const popup = new mapboxgl.Popup({offset: 25}).setHTML(`
                     <div style="color: #1f2937; min-width: 200px;">
                         <h3 style="font-weight: bold; margin-bottom: 4px; color: #f97316;">
                             ${stop.stop_type_display}
@@ -281,20 +279,20 @@ const MapboxRouteMap: React.FC<{ route: RouteData }> = ({ route }) => {
                         <p style="font-size: 12px; color: #6b7280;">${stop.description}</p>
                         <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">
                             Arrive: ${new Date(stop.arrival_time).toLocaleString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                })}
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })}
                         </p>
                         ${stop.duration_minutes > 0 ? `
                             <p style="font-size: 12px; color: #6b7280;">
                                 Depart: ${new Date(stop.departure_time).toLocaleString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                })}
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })}
                             </p>
                         ` : ''}
                     </div>
@@ -400,7 +398,7 @@ function App() {
         });
     };
 
-     const getAllTrips = async () => {
+    const getAllTrips = async () => {
         const response = await fetch(`${API_BASE_URL}/trips/`, {
             method: 'GET',
             headers: {
@@ -451,7 +449,7 @@ function App() {
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        setFormData({...formData, [e.target.name]: e.target.value});
     };
 
     const validateForm = () => {
@@ -690,7 +688,7 @@ function App() {
                     <div className="flex items-start p-4 gap-3">
                         <div className="flex-shrink-0">
                             <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                                <AlertCircle className="w-5 h-5 text-red-400" />
+                                <AlertCircle className="w-5 h-5 text-red-400"/>
                             </div>
                         </div>
 
@@ -711,7 +709,7 @@ function App() {
                         </button>
                     </div>
 
-                    <div className="h-1 bg-gradient-to-r from-red-500 to-orange-500" />
+                    <div className="h-1 bg-gradient-to-r from-red-500 to-orange-500"/>
                 </div>
             </div>
         );
@@ -724,7 +722,7 @@ function App() {
                     <div className="flex items-center justify-between flex-wrap gap-4">
                         <div className="flex items-center gap-3">
                             <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-2 rounded-lg">
-                                <Truck className="w-6 h-6 text-white" />
+                                <Truck className="w-6 h-6 text-white"/>
                             </div>
                             <div>
                                 <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
@@ -748,7 +746,7 @@ function App() {
                                 onClick={() => setShowCreateForm(true)}
                                 className="px-4 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 transition-all flex items-center gap-2"
                             >
-                                <Plus className="w-4 h-4" />
+                                <Plus className="w-4 h-4"/>
                                 New Trip
                             </button>
                         </nav>
@@ -758,8 +756,10 @@ function App() {
 
             <main className="container mx-auto px-4 py-8 max-w-full">
                 {showCreateForm && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                        <div className="bg-gray-800 rounded-2xl border border-orange-500/20 p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                        <div
+                            className="bg-gray-800 rounded-2xl border border-orange-500/20 p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             <div className="flex justify-between items-center mb-6">
                                 <h2 className="text-2xl font-bold text-orange-400">Create New Trip</h2>
                                 <button
@@ -900,9 +900,9 @@ function App() {
                                     >
                                         {isSubmitting ? (
                                             <span className="flex items-center justify-center gap-2">
-                    <div
-                        className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                    Creating...
+                                <div
+                                    className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                Creating...
                 </span>
                                         ) : (
                                             'Create Trip'
@@ -1119,7 +1119,8 @@ function App() {
                         >
                             ← Back to Trips
                         </button>
-                        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-orange-500/20 p-6 mb-6">
+                        <div
+                            className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-orange-500/20 p-6 mb-6">
                             <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
                                 Daily Logs - {selectedTrip.trip_name}
                             </h2>
@@ -1128,12 +1129,14 @@ function App() {
 
                         {loadingLogs ? (
                             <div className="text-center py-12">
-                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+                                <div
+                                    className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
                                 <p className="text-gray-400 mt-4">Loading daily logs...</p>
                             </div>
                         ) : dailyLogs.length === 0 ? (
-                            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-8 text-center">
-                                <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                            <div
+                                className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-8 text-center">
+                                <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-4"/>
                                 <h3 className="text-xl font-bold text-gray-300 mb-2">No Daily Logs Found</h3>
                                 <p className="text-gray-400">
                                     This trip doesn't have any daily logs yet. Generate a route first to create logs.
@@ -1199,7 +1202,8 @@ function App() {
                                             </div>
 
                                             <div className="border-t border-gray-700 pt-4">
-                                                <div className="flex flex-col sm:flex-row justify-between gap-2 text-sm">
+                                                <div
+                                                    className="flex flex-col sm:flex-row justify-between gap-2 text-sm">
                                     <span className="text-gray-400">
                                         Start: <span className="text-gray-300">{log.start_location}</span>
                                     </span>
@@ -1214,11 +1218,13 @@ function App() {
 
                                 <div className="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                                     <div className="flex items-start gap-3">
-                                        <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                                        <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0"/>
                                         <div>
-                                            <h4 className="font-bold text-blue-400 mb-1">ELD Grid Visualization Coming Soon</h4>
+                                            <h4 className="font-bold text-blue-400 mb-1">ELD Grid Visualization Coming
+                                                Soon</h4>
                                             <p className="text-sm text-gray-400">
-                                                The visual ELD log grid (24-hour timeline with duty status bars) will be implemented next.
+                                                The visual ELD log grid (24-hour timeline with duty status bars) will be
+                                                implemented next.
                                             </p>
                                         </div>
                                     </div>

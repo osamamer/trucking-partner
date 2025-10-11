@@ -9,6 +9,8 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+import os
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -28,7 +30,8 @@ SECRET_KEY = "django-insecure-y_eu20_0dm46i33!5**pqj@===6g2=42=!z6pz^w!jd40d@kmk
 DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
-MAPBOX_ACCESS_TOKEN = 'pk.eyJ1Ijoib3NhbWFhbWVyIiwiYSI6ImNtZ2pyMzdyZDBmcGYybHIwM3lhZm94c3MifQ.P8N7prGgak8NWqB1tGdIDw'
+
+MAPBOX_ACCESS_TOKEN = os.getenv('MAPBOX_TOKEN')
 # Application definition
 
 INSTALLED_APPS = [
