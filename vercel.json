@@ -1,16 +1,11 @@
 {
   "version": 2,
+  "buildCommand": "cd frontend/react && npm install && npm run build",
+  "outputDirectory": "frontend/react/dist",
   "builds": [
     {
       "src": "backend/vercel_app.py",
       "use": "@vercel/python"
-    },
-    {
-      "src": "frontend/react/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "../../dist"
-      }
     }
   ],
   "routes": [
@@ -20,7 +15,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/dist/$1"
+      "dest": "/index.html"
     }
   ]
 }
