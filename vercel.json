@@ -20,7 +20,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/react/dist/$1"
+      "dest": "frontend/react/$1"
     }
   ]
 }
