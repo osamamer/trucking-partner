@@ -14,17 +14,7 @@
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "backend/vercel_app.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/frontend/react/dist/$1"
-    },
-    {
-      "src": "/",
-      "dest": "/frontend/react/dist/index.html"
-    }
+    { "src": "/api/(.*)", "dest": "backend/vercel_app.py" },
+    { "src": "/(.*)", "dest": "frontend/react/dist/$1" }
   ]
 }
