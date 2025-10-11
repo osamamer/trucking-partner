@@ -22,5 +22,8 @@
       "src": "/(.*)",
       "dest": "frontend/react/dist/$1"
     }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/frontend/react/dist" }
   ]
 }
