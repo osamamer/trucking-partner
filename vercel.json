@@ -21,6 +21,10 @@
     {
       "src": "/(.*)",
       "dest": "frontend/react/$1"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "frontend/react/assets/$1"
     }
   ]
 }
