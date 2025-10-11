@@ -2,11 +2,11 @@
   "version": 2,
   "builds": [
     {
-      "src": "backend/vercel_app.py",
+      "src": "../backend/vercel_app.py",
       "use": "@vercel/python"
     },
     {
-      "src": "frontend/react/package.json",
+      "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
         "distDir": "dist"
@@ -16,15 +16,11 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "backend/vercel_app.py"
-    },
-    {
-      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))",
-      "dest": "frontend/react/dist/$1"
+      "dest": "../backend/vercel_app.py"
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/react/dist/index.html"
+      "dest": "/dist/$1"
     }
   ]
 }
