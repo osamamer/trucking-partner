@@ -10,7 +10,7 @@
       "src": "frontend/react/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "frontend/react/dist"
+        "distDir": "dist"
       }
     }
   ],
@@ -21,7 +21,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/react/$1"
+      "dest": "frontend/react/dist/$1"
     }
   ]
 }
