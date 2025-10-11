@@ -11,6 +11,7 @@ interface LogsViewProps {
 }
 
 const LogsView: React.FC<LogsViewProps> = ({ selectedTrip, onBack, dailyLogs, loadingLogs }) => {
+    // @ts-ignore
     return (
         <div>
             <button
@@ -67,7 +68,7 @@ const LogsView: React.FC<LogsViewProps> = ({ selectedTrip, onBack, dailyLogs, lo
                                         <div className="text-xs text-gray-400 mb-1">Driving</div>
                                         <div className="text-lg font-bold text-orange-400">
                                             {typeof log.total_driving_hours === "number"
-                                                ? log.total_driving_hours.toFixed(1)
+                                                ? parseFloat(log.total_driving_hours).toFixed(1)
                                                 : log.total_driving_hours}
                                             h
                                         </div>
@@ -76,7 +77,7 @@ const LogsView: React.FC<LogsViewProps> = ({ selectedTrip, onBack, dailyLogs, lo
                                         <div className="text-xs text-gray-400 mb-1">On-Duty</div>
                                         <div className="text-lg font-bold text-blue-400">
                                             {typeof log.total_on_duty_hours === "number"
-                                                ? log.total_on_duty_hours.toFixed(1)
+                                                ? parseFloat(log.total_on_duty_hours).toFixed(1)
                                                 : log.total_on_duty_hours}
                                             h
                                         </div>
@@ -85,7 +86,7 @@ const LogsView: React.FC<LogsViewProps> = ({ selectedTrip, onBack, dailyLogs, lo
                                         <div className="text-xs text-gray-400 mb-1">Off-Duty</div>
                                         <div className="text-lg font-bold text-green-400">
                                             {typeof log.total_off_duty_hours === "number"
-                                                ? log.total_off_duty_hours.toFixed(1)
+                                                ? parseFloat(log.total_off_duty_hours).toFixed(1)
                                                 : log.total_off_duty_hours}
                                             h
                                         </div>

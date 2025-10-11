@@ -1,22 +1,14 @@
 import React from "react";
 import { MapPin, Navigation, FileText } from "lucide-react";
+import type { Trip } from '../App.tsx';
 
-interface Trip {
-    id: number;
-    trip_name: string;
-    pickup_location_address: string;
-    dropoff_location_address: string;
-    total_distance_miles?: number;
-    days_required?: number;
-    status: string;
-}
 
 interface TripsViewProps {
     trips: Trip[];
     generatingRouteForTrip: number | null;
-    viewTripRoute: (trip: Trip) => void;
-    viewTripLogs: (trip: Trip) => void;
-    handleGenerateRoute: (trip: Trip) => void;
+    viewTripRoute: (trip: Trip) => Promise<void>;
+    viewTripLogs: (trip: Trip) => Promise<void>;
+    handleGenerateRoute: (trip: Trip) => Promise<void>;
     getStatusColor: (status: string) => string;
 }
 

@@ -61,7 +61,7 @@ export const MapboxRouteMap: React.FC<{ route: RouteData }> = ({route}) => {
             });
 
             // Add markers for each stop
-            route.stops.forEach((stop, index) => {
+            route.stops.forEach((stop) => {
                 if (stop.location.latitude === 0 && stop.location.longitude === 0) return;
 
                 // Create custom marker element

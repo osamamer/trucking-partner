@@ -1,5 +1,5 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {Truck, MapPin, Clock, AlertCircle, FileText, Plus, ChevronRight, Navigation} from 'lucide-react';
+import React, {useEffect, useState} from 'react';
+import {Truck, AlertCircle, Plus} from 'lucide-react';
 import TripsView from "./components/TripsView.tsx";
 import LogsView from "./components/LogsView.tsx";
 import RoutesView from "./components/RoutesView.tsx";
