@@ -9,7 +9,7 @@
       "src": "frontend/react/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "../../dist"
+        "distDir": "dist"
       }
     }
   ],
@@ -19,8 +19,12 @@
       "dest": "backend/vercel_app.py"
     },
     {
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))",
+      "dest": "frontend/react/dist/$1"
+    },
+    {
       "src": "/(.*)",
-      "dest": "/dist/$1"
+      "dest": "frontend/react/dist/index.html"
     }
   ]
 }
