@@ -280,11 +280,23 @@ const MapboxRouteMap: React.FC<{ route: RouteData }> = ({ route }) => {
                         <p style="font-size: 14px; margin-bottom: 8px;">${stop.location.address}</p>
                         <p style="font-size: 12px; color: #6b7280;">${stop.description}</p>
                         <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">
-                            Arrive: ${new Date(stop.arrival_time).toLocaleTimeString('en-US', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })}
+                            Arrive: ${new Date(stop.arrival_time).toLocaleString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
                         </p>
+                        ${stop.duration_minutes > 0 ? `
+                            <p style="font-size: 12px; color: #6b7280;">
+                                Depart: ${new Date(stop.departure_time).toLocaleString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
+                            </p>
+                        ` : ''}
                     </div>
                 `);
 
@@ -353,6 +365,24 @@ function App() {
         planned_start_time: ''
     });
 
+    const formatDateTime = (dateStr: string) => {
+        return new Date(dateStr).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const formatDateTimeShort = (dateStr: string) => {
+        return new Date(dateStr).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('en-US', {
             month: 'short',
@@ -1051,12 +1081,15 @@ function App() {
                                                             className="text-xs text-gray-500 flex-shrink-0">Stop {stop.sequence + 1}</span>
                                                     </div>
                                                     <div className="flex flex-wrap gap-4 text-sm text-gray-400">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-4 h-4"/>
-                              Arrive: {formatTime(stop.arrival_time)}
-                            </span>
+    <span className="flex items-center gap-1">
+        <Clock className="w-4 h-4"/>
+        Arrive: {formatDateTimeShort(stop.arrival_time)}
+    </span>
                                                         {stop.duration_minutes > 0 && (
-                                                            <span>Duration: {stop.duration_minutes} min</span>
+                                                            <>
+                                                                <span>Duration: {stop.duration_minutes} min</span>
+                                                                <span>Depart: {formatDateTimeShort(stop.departure_time)}</span>
+                                                            </>
                                                         )}
                                                     </div>
                                                     {stop.description && (
@@ -1117,9 +1150,17 @@ function App() {
                                             <div className="flex justify-between items-start mb-4 flex-wrap gap-3">
                                                 <div>
                                                     <h3 className="text-xl font-bold text-orange-400">Day {log.day_number}</h3>
-                                                    <p className="text-sm text-gray-400">{formatDate(log.log_date)}</p>
+                                                    <p className="text-sm text-gray-400">
+                                                        {new Date(log.log_date).toLocaleDateString('en-US', {
+                                                            weekday: 'short',
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric'
+                                                        })}
+                                                    </p>
                                                 </div>
-                                                <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
+                                                <span
+                                                    className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
                                     Compliant
                                 </span>
                                             </div>

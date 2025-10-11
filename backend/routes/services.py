@@ -339,12 +339,21 @@ class RouteGenerationService:
             'duration_minutes': 0,
             'description': 'Trip start location'
         })
-        # TODO: Fix time display in frontend
-        # Stop 1: Pickup location
+
+        # Drive to pickup location
         leg_0 = base_route['legs'][0]
         drive_time_hours = leg_0['duration'] / 3600
-        self._advance_time(drive_time_hours, leg_0['distance'] * 0.000621371, is_driving=True)
+        drive_distance_miles = leg_0['distance'] * 0.000621371
 
+        # Advance time for driving to pickup using datetime
+        self.current_time += timedelta(hours=drive_time_hours)
+        self.cumulative_miles += drive_distance_miles
+        self.daily_driving_hours += drive_time_hours
+        self.daily_on_duty_hours += drive_time_hours
+        self.hours_since_30min_break += drive_time_hours
+        self.miles_since_fuel += drive_distance_miles
+
+        # Stop 1: Pickup location
         self._add_stop({
             'type': 'pickup',
             'address': self.trip.pickup_location_address,
@@ -353,9 +362,6 @@ class RouteGenerationService:
             'duration_minutes': HOSRules.PICKUP_DURATION_MINUTES,
             'description': 'Load pickup (1 hour)'
         })
-
-        # Advance time for pickup (on-duty, not driving)
-        self._advance_time(HOSRules.PICKUP_DURATION_MINUTES / 60, 0, is_driving=False)
 
         # Now traverse from pickup to dropoff, inserting stops as needed
         leg_1 = base_route['legs'][1]
@@ -412,9 +418,15 @@ class RouteGenerationService:
             hours_can_drive = min(hours_until_break, hours_until_daily_limit)
             miles_can_drive = min(hours_can_drive * HOSRules.AVERAGE_SPEED_MPH, miles_until_fuel, distance_remaining)
 
-            # Drive this segment
+            # Drive this segment using datetime
             hours_to_drive = miles_can_drive / HOSRules.AVERAGE_SPEED_MPH
-            self._advance_time(hours_to_drive, miles_can_drive, is_driving=True)
+
+            self.current_time += timedelta(hours=hours_to_drive)
+            self.cumulative_miles += miles_can_drive
+            self.daily_driving_hours += hours_to_drive
+            self.daily_on_duty_hours += hours_to_drive
+            self.hours_since_30min_break += hours_to_drive
+            self.miles_since_fuel += miles_can_drive
 
             distance_covered_in_leg += miles_can_drive
             distance_remaining -= miles_can_drive
@@ -439,8 +451,8 @@ class RouteGenerationService:
                 'place_id': stop_location.get('place_id', '')
             })
 
-            # Reset 30-min break timer, but this is on-duty time
-            self.current_time += timedelta(minutes=HOSRules.BREAK_30MIN_DURATION)
+            # Reset 30-min break timer (break is on-duty not driving)
+            self.daily_on_duty_hours += HOSRules.BREAK_30MIN_DURATION / 60
             self.hours_since_30min_break = 0
 
         else:  # 10-hour rest
@@ -454,8 +466,8 @@ class RouteGenerationService:
                 'place_id': stop_location.get('place_id', '')
             })
 
-            # Reset daily counters - new day!
-            self.current_time += timedelta(minutes=HOSRules.BREAK_10HR_DURATION)
+            # Reset daily counters - new day starts after this rest
+            # Note: current_time already advanced by _add_stop to departure_time
             self.daily_driving_hours = 0
             self.daily_on_duty_hours = 0
             self.hours_since_30min_break = 0
@@ -479,12 +491,11 @@ class RouteGenerationService:
             'place_id': stop_location.get('place_id', '')
         })
 
-        # Fuel stop is on-duty, not driving
-        self._advance_time(HOSRules.FUEL_STOP_DURATION_MINUTES / 60, 0, is_driving=False)
+        # Reset fuel counter (time and on-duty hours already handled by _add_stop)
         self.miles_since_fuel = 0
 
     def _add_stop(self, stop_data: Dict):
-        """Add a stop to the list"""
+        """Add a stop to the list - arrival time is current_time"""
         arrival_time = self.current_time
         departure_time = arrival_time + timedelta(minutes=stop_data['duration_minutes'])
 
@@ -502,7 +513,13 @@ class RouteGenerationService:
             'cumulative_miles': self.cumulative_miles
         })
 
+        # Update current_time to departure time using datetime
         self.current_time = departure_time
+
+        # Update on-duty hours for non-driving activities
+        if stop_data['type'] in ['pickup', 'dropoff', 'fuel']:
+            hours = stop_data['duration_minutes'] / 60
+            self.daily_on_duty_hours += hours
 
     def _advance_time(self, hours: float, miles: float, is_driving: bool):
         """Advance time and update counters"""
@@ -572,30 +589,131 @@ class RouteGenerationService:
             )
 
     def _generate_daily_logs(self, route: Route):
-        """Generate daily log entries for the trip"""
+        """Generate daily log entries for the trip - one log per calendar day"""
 
-        # Group stops by day
-        current_day = 1
-        day_start_time = self.stops[0]['arrival_time']
-        day_stops = []
+        if not self.stops:
+            return
 
-        for stop in self.stops:
-            # Check if we hit a 10-hour rest (new day boundary)
-            if stop['stop_type'] == '10hr_break' and day_stops:
-                self._create_daily_log(route, current_day, day_start_time, stop['arrival_time'], day_stops)
-                current_day += 1
-                day_start_time = stop['departure_time']
-                day_stops = []
-            else:
-                day_stops.append(stop)
+        # Group stops by calendar date
+        stops_by_date = {}
 
-        # Create final day log
-        if day_stops:
-            self._create_daily_log(route, current_day, day_start_time, self.stops[-1]['departure_time'], day_stops)
+        for i, stop in enumerate(self.stops):
+            # Determine which dates this stop spans
+            arrival_date = stop['arrival_time'].date()
+            departure_date = stop['departure_time'].date()
+
+            # Add stop to arrival date
+            if arrival_date not in stops_by_date:
+                stops_by_date[arrival_date] = []
+            stops_by_date[arrival_date].append({
+                'stop': stop,
+                'stop_index': i,
+                'time_in_day': (stop['departure_time'] - stop['arrival_time']).total_seconds() / 3600
+                if arrival_date == departure_date
+                else (datetime.combine(arrival_date, datetime.max.time()).replace(tzinfo=stop['arrival_time'].tzinfo) - stop['arrival_time']).total_seconds() / 3600
+            })
+
+            # If stop spans into next day, add it there too
+            if departure_date > arrival_date:
+                if departure_date not in stops_by_date:
+                    stops_by_date[departure_date] = []
+                stops_by_date[departure_date].append({
+                    'stop': stop,
+                    'stop_index': i,
+                    'time_in_day': (stop['departure_time'] - datetime.combine(departure_date, datetime.min.time()).replace(tzinfo=stop['departure_time'].tzinfo)).total_seconds() / 3600
+                })
+
+        # Create a log for each calendar day
+        sorted_dates = sorted(stops_by_date.keys())
+
+        for day_number, log_date in enumerate(sorted_dates, start=1):
+            self._create_daily_log_for_date(route, day_number, log_date, stops_by_date[log_date])
 
         # Update trip with days required
-        self.trip.days_required = current_day
+        self.trip.days_required = len(sorted_dates)
         self.trip.save()
+
+
+    def _create_daily_log_for_date(self, route: Route, day_number: int, log_date, day_stop_info: List[Dict]):
+        """Create a daily log for a specific calendar date"""
+
+        driving_hours = 0
+        on_duty_not_driving_hours = 0
+        off_duty_hours = 0
+        total_miles = 0
+
+        # Define the day boundaries
+        day_start = datetime.combine(log_date, datetime.min.time())
+        day_end = datetime.combine(log_date, datetime.max.time())
+
+        # Make timezone-aware if the stops are timezone-aware
+        if day_stop_info and day_stop_info[0]['stop']['arrival_time'].tzinfo:
+            day_start = day_start.replace(tzinfo=day_stop_info[0]['stop']['arrival_time'].tzinfo)
+            day_end = day_end.replace(tzinfo=day_stop_info[0]['stop']['arrival_time'].tzinfo)
+
+        start_location = None
+        end_location = None
+
+        # Process all stops that occur on this date
+        for i, stop_info in enumerate(day_stop_info):
+            stop = stop_info['stop']
+
+            # Track locations
+            if start_location is None:
+                start_location = stop['address']
+            end_location = stop['address']
+
+            # Calculate driving time to this stop (if not the first stop of the day)
+            if i > 0:
+                prev_stop = day_stop_info[i - 1]['stop']
+
+                # Only count drive time if it's between consecutive stops
+                if stop_info['stop_index'] == day_stop_info[i - 1]['stop_index'] + 1:
+                    # Calculate how much of the drive happened on this calendar day
+                    drive_start = max(prev_stop['departure_time'], day_start)
+                    drive_end = min(stop['arrival_time'], day_end)
+
+                    if drive_end > drive_start:
+                        drive_duration = (drive_end - drive_start).total_seconds() / 3600
+                        driving_hours += drive_duration
+
+                        # Calculate miles proportionally
+                        total_drive_duration = (stop['arrival_time'] - prev_stop['departure_time']).total_seconds() / 3600
+                        if total_drive_duration > 0:
+                            drive_distance = stop['cumulative_miles'] - prev_stop['cumulative_miles']
+                            miles_this_day = drive_distance * (drive_duration / total_drive_duration)
+                            total_miles += miles_this_day
+
+            # Calculate how much of this stop's duration falls on this calendar day
+            stop_start = max(stop['arrival_time'], day_start)
+            stop_end = min(stop['departure_time'], day_end)
+
+            if stop_end > stop_start:
+                stop_duration_hours = (stop_end - stop_start).total_seconds() / 3600
+
+                if stop['stop_type'] in ['pickup', 'dropoff', 'fuel']:
+                    on_duty_not_driving_hours += stop_duration_hours
+                elif stop['stop_type'] in ['30min_break', '10hr_break']:
+                    off_duty_hours += stop_duration_hours
+
+        # Total on-duty hours
+        total_on_duty_hours = driving_hours + on_duty_not_driving_hours
+
+        # Remaining time in the 24-hour period is off-duty
+        total_off_duty_hours = 24 - total_on_duty_hours
+
+        DailyLog.objects.create(
+            trip=self.trip,
+            day_number=day_number,
+            log_date=log_date,
+            total_driving_hours=round(driving_hours, 2),
+            total_on_duty_hours=round(total_on_duty_hours, 2),
+            total_off_duty_hours=round(total_off_duty_hours, 2),
+            start_location=start_location or 'N/A',
+            end_location=end_location or 'N/A',
+            total_miles=round(total_miles, 1),
+            is_compliant=True
+        )
 
     def _create_daily_log(self, route: Route, day_number: int, start_time: datetime, end_time: datetime, stops: List[Dict]):
         """Create a single daily log"""
